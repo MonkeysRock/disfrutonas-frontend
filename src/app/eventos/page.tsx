@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
-import SearchHeader, { AppDateMode } from "@/components/search/SearchHeader";
+import type { AppDateMode } from "@/components/search/SearchHeader";
 import FiltersModal from "@/components/search/FiltersModal";
 import { events } from "@/data/events";
 import { normalizeText, searchLocations } from "@/lib/helpers";
@@ -129,7 +129,7 @@ function EventResultCard({ event }: EventCardProps) {
   );
 }
 
-export default function EventsPage() {
+function EventsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isDesktop = useIsDesktop();
@@ -556,5 +556,13 @@ export default function EventsPage() {
         )}
       </section>
     </main>
+  );
+}
+
+export default function EventsPage() {
+  return (
+    <Suspense fallback={null}>
+      <EventsPageContent />
+    </Suspense>
   );
 }
