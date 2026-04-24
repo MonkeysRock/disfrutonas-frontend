@@ -47,8 +47,8 @@ const culturalCategories = Array.from(
 ).sort((a, b) => a.localeCompare(b, "es"));
 
 const paidEventPrices = events
-  .filter((event) => !event.isFree && typeof event.priceFrom === "number")
-  .map((event) => event.priceFrom);
+  .filter((event) => !event.isFree && typeof event.price === "number")
+  .map((event) => event.price);
 
 const minEventPrice = paidEventPrices.length ? Math.min(...paidEventPrices) : 0;
 const maxEventPrice = paidEventPrices.length ? Math.max(...paidEventPrices) : 100;
