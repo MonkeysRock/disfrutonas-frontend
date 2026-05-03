@@ -6,8 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
 import type { AppDateMode } from "@/components/search/SearchHeader";
 import FiltersModal from "@/components/search/FiltersModal";
-import { events } from "@/data/events";
+import { events as fallbackEvents } from "@/data/events";
 import { normalizeText, searchLocations } from "@/lib/helpers";
+import { supabase } from "@/lib/supabase";
 import {
   addMonths,
   dayStart,
@@ -28,6 +29,65 @@ import {
   useOutsideClick,
 } from "@/lib/search-ui";
 
+type AppEvent = (typeof fallbackEvents)[number];
+
+type SupabaseEvent = {
+  id: string;
+  title: string | null;
+  slug: string | null;
+  city: string | null;
+  city_slug: string | null;
+  pillar: string | null;
+  pillar_slug: string | null;
+  category: string | null;
+  category_slug: string | null;
+  event_date: string | null;
+  time: string | null;
+  date: string | null;
+  place: string | null;
+  description: string | null;
+  is_free: boolean | null;
+  price: number | null;
+  price_label: string | null;
+  image: string | null;
+  image_alt: string | null;
+  image_label: string | null;
+  image_sub_label: string | null;
+  lat: number | null;
+  lng: number | null;
+  source_url: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+function mapSupabaseEvent(event: SupabaseEvent): AppEvent {
+  return {
+    title: event.title || "Evento sin título",
+    slug: event.slug || event.id,
+    city: event.city || "",
+    citySlug: event.city_slug || "",
+    pillar: event.pillar || "Culturales",
+    pillarSlug: event.pillar_slug || "culturales",
+    category: event.category || "General",
+    categorySlug: event.category_slug || "general",
+    date: event.date || event.event_date || "",
+    time: event.time || "",
+    place: event.place || "",
+    description: event.description || "",
+    isFree: Boolean(event.is_free),
+    price: typeof event.price === "number" ? event.price : undefined,
+    priceLabel: event.price_label || (event.is_free ? "Gratis" : "Consultar precio"),
+    image:
+      event.image ||
+      "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1200&auto=format&fit=crop",
+    imageAlt: event.image_alt || event.title || "Evento",
+    imageLabel: event.image_label || event.category || "Evento",
+    imageSubLabel: event.image_sub_label || event.city || "",
+    lat: typeof event.lat === "number" ? event.lat : undefined,
+    lng: typeof event.lng === "number" ? event.lng : undefined,
+  } as AppEvent;
+}
+
 function resolveModeFromParams(
   fecha: string | null,
   fechaDesde: string | null,
@@ -39,34 +99,7 @@ function resolveModeFromParams(
   return "none";
 }
 
-const sportsCategories = Array.from(
-  new Set(
-    events
-      .filter((event) => event.pillar === "Deportivos")
-      .map((event) => event.category)
-  )
-).sort((a, b) => a.localeCompare(b, "es"));
-
-const culturalCategories = Array.from(
-  new Set(
-    events
-      .filter((event) => event.pillar === "Culturales")
-      .map((event) => event.category)
-  )
-).sort((a, b) => a.localeCompare(b, "es"));
-
-const paidEventPrices = events
-  .filter((event) => !event.isFree && typeof event.price === "number")
-  .map((event) => event.price);
-
-const minEventPrice = paidEventPrices.length ? Math.min(...paidEventPrices) : 0;
-const maxEventPrice = paidEventPrices.length ? Math.max(...paidEventPrices) : 1000;
-
-type EventCardProps = {
-  event: (typeof events)[number];
-};
-
-function EventResultCard({ event }: EventCardProps) {
+function EventResultCard({ event }: { event: AppEvent }) {
   return (
     <Link
       href={`/eventos/${event.citySlug}/${event.pillarSlug}/${event.categorySlug}/${event.slug}`}
@@ -114,11 +147,11 @@ function EventResultCard({ event }: EventCardProps) {
         </p>
 
         <p className="mb-1 text-[15px] text-[#666]">
-          <strong className="text-[#222]">Fecha:</strong> {event.date}
+          <strong className="text-[#222]">Fecha:</strong> {event.date || "Próximamente"}
         </p>
 
         <p className="mb-4 text-[15px] text-[#666]">
-          <strong className="text-[#222]">Lugar:</strong> {event.place}
+          <strong className="text-[#222]">Lugar:</strong> {event.place || "Por confirmar"}
         </p>
 
         <div className="inline-flex rounded-[14px] bg-[#111] px-4 py-3 text-sm font-bold text-white">
@@ -134,6 +167,9 @@ function EventsPageContent() {
   const searchParams = useSearchParams();
   const isDesktop = useIsDesktop();
 
+  const [events, setEvents] = useState<AppEvent[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+
   const [locationInput, setLocationInput] = useState("");
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -147,8 +183,76 @@ function EventsPageContent() {
   const [selectedPillar, setSelectedPillar] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [onlyFree, setOnlyFree] = useState(false);
-  const [priceMin, setPriceMin] = useState(minEventPrice);
-  const [priceMax, setPriceMax] = useState(maxEventPrice);
+
+  useEffect(() => {
+    async function loadEvents() {
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .order("created_at", { ascending: false });
+        console.log("SUPABASE DATA:", data);
+console.log("SUPABASE ERROR:", error);
+
+      if (error) {
+        console.error("Error cargando eventos desde Supabase:", error);
+        setEvents(fallbackEvents);
+        setIsLoadingEvents(false);
+        return;
+      }
+
+      const mappedEvents = (data || []).map((event) =>
+        mapSupabaseEvent(event as SupabaseEvent)
+      );
+
+      setEvents(mappedEvents.length > 0 ? mappedEvents : fallbackEvents);
+      setIsLoadingEvents(false);
+    }
+
+    loadEvents();
+  }, []);
+
+  const sportsCategories = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          events
+            .filter((event) => event.pillar === "Deportivos")
+            .map((event) => event.category)
+        )
+      ).sort((a, b) => a.localeCompare(b, "es")),
+    [events]
+  );
+
+  const culturalCategories = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          events
+            .filter((event) => event.pillar === "Culturales")
+            .map((event) => event.category)
+        )
+      ).sort((a, b) => a.localeCompare(b, "es")),
+    [events]
+  );
+
+  const paidEventPrices = useMemo(
+    () =>
+      events
+        .filter((event) => !event.isFree && typeof event.price === "number")
+        .map((event) => event.price as number),
+    [events]
+  );
+
+  const minEventPrice = paidEventPrices.length ? Math.min(...paidEventPrices) : 0;
+  const maxEventPrice = paidEventPrices.length ? Math.max(...paidEventPrices) : 1000;
+
+  const [priceMin, setPriceMin] = useState(0);
+  const [priceMax, setPriceMax] = useState(1000);
+
+  useEffect(() => {
+    setPriceMin(minEventPrice);
+    setPriceMax(maxEventPrice);
+  }, [minEventPrice, maxEventPrice]);
 
   useEffect(() => {
     const fecha = searchParams.get("fecha");
@@ -188,8 +292,9 @@ function EventsPageContent() {
       categoriesParam ? categoriesParam.split(",").filter(Boolean) : []
     );
     setOnlyFree(gratisParam);
-    setPriceMin(precioMinParam ? Number(precioMinParam) : minEventPrice);
-    setPriceMax(precioMaxParam ? Number(precioMaxParam) : maxEventPrice);
+
+    if (precioMinParam) setPriceMin(Number(precioMinParam));
+    if (precioMaxParam) setPriceMax(Number(precioMaxParam));
 
     if (ubicacionNombre) {
       setLocationInput(ubicacionNombre);
@@ -228,7 +333,7 @@ function EventsPageContent() {
 
       const matchesLocationFromInput = locationInput
         ? normalizeText(event.city).includes(normalizedInput) ||
-          normalizeText(event.place).includes(normalizedInput)
+          normalizeText(event.place || "").includes(normalizedInput)
         : true;
 
       const matchesLocation = ubicacionParam
@@ -273,6 +378,7 @@ function EventsPageContent() {
       );
     });
   }, [
+    events,
     searchParams,
     locationInput,
     selectedDateMode,
@@ -521,7 +627,11 @@ function EventsPageContent() {
 
         <div className="mb-8">
           <h1 className="mb-2 text-[34px] font-extrabold tracking-[-0.8px] sm:text-[44px]">
-            {filteredEvents.length} evento{filteredEvents.length === 1 ? "" : "s"} encontrados
+            {isLoadingEvents
+              ? "Cargando eventos..."
+              : `${filteredEvents.length} evento${
+                  filteredEvents.length === 1 ? "" : "s"
+                } encontrados`}
           </h1>
 
           <p className="m-0 text-[17px] text-[#666] sm:text-[18px]">
@@ -529,7 +639,7 @@ function EventsPageContent() {
           </p>
         </div>
 
-        {filteredEvents.length === 0 ? (
+        {!isLoadingEvents && filteredEvents.length === 0 ? (
           <section className="rounded-[28px] border border-[#eee] bg-white p-8 shadow-[0_10px_24px_rgba(0,0,0,0.04)]">
             <h2 className="mb-3 text-[28px] font-extrabold tracking-[-0.6px]">
               No hay resultados con esos filtros

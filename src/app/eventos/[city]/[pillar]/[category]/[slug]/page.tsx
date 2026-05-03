@@ -1,22 +1,155 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import EventDetailHeader from "@/components/layout/EventDetailHeader";
-import { getEventByFullPath, getRelatedEvents } from "@/lib/helpers";
+import { supabase } from "@/lib/supabase";
 
 const SITE_URL = "https://disfrutonas.com";
+
+type PageParams = {
+  city: string;
+  pillar: string;
+  category: string;
+  slug: string;
+};
+
+type SupabaseEvent = {
+  id: string;
+  title: string | null;
+  slug: string | null;
+  city: string | null;
+  city_slug: string | null;
+  pillar: string | null;
+  pillar_slug: string | null;
+  category: string | null;
+  category_slug: string | null;
+  event_date: string | null;
+  time: string | null;
+  date: string | null;
+  place: string | null;
+  description: string | null;
+  is_free: boolean | null;
+  price: number | null;
+  price_label: string | null;
+  image: string | null;
+  image_alt: string | null;
+  image_label: string | null;
+  image_sub_label: string | null;
+  lat: number | null;
+  lng: number | null;
+  source_url: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type EventDetail = {
+  id: string;
+  title: string;
+  slug: string;
+  city: string;
+  citySlug: string;
+  pillar: string;
+  pillarSlug: string;
+  category: string;
+  categorySlug: string;
+  eventDate: string;
+  time: string;
+  date: string;
+  place: string;
+  description: string;
+  isFree: boolean;
+  price: number;
+  priceLabel: string;
+  image: string;
+  imageAlt: string;
+  imageLabel: string;
+  imageSubLabel: string;
+  lat: number;
+  lng: number;
+  sourceUrl: string;
+  includes: string[];
+};
+
+function mapSupabaseEvent(event: SupabaseEvent): EventDetail {
+  const isFree = Boolean(event.is_free);
+  const price = typeof event.price === "number" ? event.price : 0;
+
+  return {
+    id: event.id,
+    title: event.title || "Evento sin título",
+    slug: event.slug || event.id,
+    city: event.city || "",
+    citySlug: event.city_slug || "",
+    pillar: event.pillar || "Culturales",
+    pillarSlug: event.pillar_slug || "culturales",
+    category: event.category || "General",
+    categorySlug: event.category_slug || "general",
+    eventDate: event.event_date || "",
+    time: event.time || "00:00",
+    date: event.date || event.event_date || "Fecha por confirmar",
+    place: event.place || "Lugar por confirmar",
+    description:
+      event.description ||
+      "Evento disponible próximamente en Disfrutonas.",
+    isFree,
+    price,
+    priceLabel: event.price_label || (isFree ? "Gratis" : `${price}€`),
+    image:
+      event.image ||
+      "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1600&auto=format&fit=crop",
+    imageAlt: event.image_alt || event.title || "Evento",
+    imageLabel: event.image_label || event.title || "Evento destacado",
+    imageSubLabel: event.image_sub_label || event.city || "",
+    lat: typeof event.lat === "number" ? event.lat : 40.4168,
+    lng: typeof event.lng === "number" ? event.lng : -3.7038,
+    sourceUrl: event.source_url || "",
+    includes: [
+      "Acceso al evento",
+      "Información actualizada",
+      "Ubicación verificada",
+    ],
+  };
+}
+
+async function getEventByFullPath(params: PageParams) {
+  const { data, error } = await supabase
+    .from("events")
+    .select("*")
+    .eq("city_slug", params.city)
+    .eq("pillar_slug", params.pillar)
+    .eq("category_slug", params.category)
+    .eq("slug", params.slug)
+    .single();
+
+  if (error || !data) {
+    console.error("Error cargando detalle desde Supabase:", error);
+    return null;
+  }
+
+  return mapSupabaseEvent(data as SupabaseEvent);
+}
+
+async function getRelatedEvents(event: EventDetail) {
+  const { data, error } = await supabase
+    .from("events")
+    .select("*")
+    .neq("id", event.id)
+    .or(`city_slug.eq.${event.citySlug},category_slug.eq.${event.categorySlug}`)
+    .limit(3);
+
+  if (error || !data) {
+    return [];
+  }
+
+  return (data as SupabaseEvent[]).map(mapSupabaseEvent);
+}
 
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{
-    city: string;
-    pillar: string;
-    category: string;
-    slug: string;
-  }>;
+  params: Promise<PageParams>;
 }): Promise<Metadata> {
   const resolvedParams = await params;
-  const event = getEventByFullPath(resolvedParams);
+  const event = await getEventByFullPath(resolvedParams);
 
   if (!event) {
     return {
@@ -61,43 +194,33 @@ export async function generateMetadata({
   };
 }
 
-function buildEventNarrative(event: {
-  title: string;
-  city: string;
-  place: string;
-  pillar: string;
-  category: string;
-  date: string;
-  description: string;
-  includes: string[];
-}) {
+function buildEventNarrative(event: EventDetail) {
   const categoryLower = event.category.toLowerCase();
   const placeText = event.place;
   const cityText = event.city;
 
   const intro =
     event.pillar === "Deportivos"
-      ? `${event.title} se celebra en ${placeText}, un espacio muy reconocible dentro de ${cityText} para vivir el deporte en directo con intensidad, ambiente y sensación de cita importante. Este tipo de plan suele atraer tanto a seguidores habituales como a gente que simplemente quiere disfrutar de una experiencia potente fuera de casa, con emoción, ritmo y un contexto muy distinto al de verlo desde lejos.`
-      : `${event.title} tiene lugar en ${placeText}, un enclave muy interesante dentro de ${cityText} para disfrutar de una propuesta cultural con personalidad propia. Más allá del evento en sí, el entorno, el ambiente y el tipo de público que suele acudir convierten la experiencia en un plan con más recorrido, de esos que empiezan antes de entrar y que siguen dejando sensación de noche especial al salir.`
+      ? `${event.title} se celebra en ${placeText}, un espacio muy reconocible dentro de ${cityText} para vivir el deporte en directo con intensidad, ambiente y sensación de cita importante.`
+      : `${event.title} tiene lugar en ${placeText}, un enclave muy interesante dentro de ${cityText} para disfrutar de una propuesta cultural con personalidad propia.`;
 
-  const venue =
-    `${placeText} encaja especialmente bien con una cita de ${categoryLower}, porque el lugar donde ocurre el evento influye muchísimo en cómo se vive. La ubicación, la atmósfera del recinto y la forma en la que el público se relaciona con el espacio ayudan a que la experiencia tenga más presencia, más ritmo y más recuerdo, algo que en planes en directo se nota desde el primer momento.`
+  const venue = `${placeText} encaja especialmente bien con una cita de ${categoryLower}, porque el lugar donde ocurre el evento influye muchísimo en cómo se vive.`;
 
   const curiosity =
     event.pillar === "Deportivos"
-      ? `Como curiosidad, los eventos deportivos suelen cambiar muchísimo según el momento del calendario, el tipo de rivalidad, el estado de los participantes o incluso la reacción del público en directo. Precisamente por eso dos citas parecidas nunca se viven igual: el ambiente, la tensión y la respuesta de la grada o del entorno hacen que cada jornada tenga una personalidad propia.`
-      : `Como curiosidad, en los eventos culturales muchas veces lo más recordado no es solo el momento central, sino también pequeños detalles que aparecen alrededor: reacciones del público, cambios de ritmo, improvisaciones, guiños del cartel o la forma en la que el espacio condiciona la experiencia. Esa suma de factores hace que incluso dentro de una misma categoría cada evento tenga una identidad distinta.`
+      ? `Como curiosidad, los eventos deportivos suelen cambiar muchísimo según el momento del calendario, el tipo de rivalidad y la reacción del público.`
+      : `Como curiosidad, en los eventos culturales muchas veces lo más recordado no es solo el momento central, sino también los pequeños detalles alrededor.`;
 
   const participants =
     event.pillar === "Deportivos"
-      ? `También influye mucho el perfil de quienes participan. En una cita así no solo cuenta el resultado o el desenlace, sino la forma de competir, el contexto en el que llegan los protagonistas y el tipo de energía que se genera entre participantes y asistentes. Ahí está una de las grandes gracias del directo: cada detalle puede cambiar la percepción del evento y volverlo mucho más memorable.`
-      : `También tiene peso el perfil de quienes forman parte del evento. En propuestas culturales, la trayectoria, el estilo, la conexión con el público o la manera de ocupar el escenario suelen marcar diferencias muy claras. Esa mezcla entre participantes, espacio y contexto hace que la experiencia gane matices y que cada plan tenga algo propio, incluso para asistentes que consumen esta categoría con frecuencia.`
+      ? `También influye mucho el perfil de quienes participan. En una cita así no solo cuenta el resultado, sino la forma de competir y la energía del directo.`
+      : `También tiene peso el perfil de quienes forman parte del evento. La trayectoria, el estilo y la conexión con el público suelen marcar diferencias muy claras.`;
 
   const closing = event.includes?.length
     ? `Además, esta propuesta incluye ${event.includes
         .slice(0, 3)
         .join(", ")
-        .toLowerCase()}, lo que ayuda a redondear la experiencia y refuerza la sensación de plan bien planteado para disfrutarlo con calma y sin complicaciones.`
+        .toLowerCase()}, lo que ayuda a redondear la experiencia.`
     : event.description;
 
   return [intro, venue, curiosity, participants, closing];
@@ -106,16 +229,10 @@ function buildEventNarrative(event: {
 export default async function EventDetailPage({
   params,
 }: {
-  params: Promise<{
-    city: string;
-    pillar: string;
-    category: string;
-    slug: string;
-  }>;
+  params: Promise<PageParams>;
 }) {
-  const { city, pillar, category, slug } = await params;
-
-  const event = getEventByFullPath({ city, pillar, category, slug });
+  const resolvedParams = await params;
+  const event = await getEventByFullPath(resolvedParams);
 
   if (!event) {
     return (
@@ -144,7 +261,7 @@ export default async function EventDetailPage({
     );
   }
 
-  const relatedEvents = getRelatedEvents(event);
+  const relatedEvents = await getRelatedEvents(event);
   const narrativeBlocks = buildEventNarrative(event);
 
   const eventUrl = `${SITE_URL}/eventos/${event.citySlug}/${event.pillarSlug}/${event.categorySlug}/${event.slug}`;
@@ -161,7 +278,7 @@ export default async function EventDetailPage({
     eventStatus: "https://schema.org/EventScheduled",
     image: [event.image],
     url: eventUrl,
-    isAccessibleForFree: event.price === 0,
+    isAccessibleForFree: event.isFree,
     location: {
       "@type": "Place",
       name: event.place,
@@ -231,7 +348,7 @@ export default async function EventDetailPage({
                   </span>
 
                   <span className="rounded-full bg-white/90 px-3 py-2 text-sm font-bold text-[#222]">
-                    {event.price === 0 ? "Gratis" : `Desde ${event.price}€`}
+                    {event.isFree ? "Gratis" : `Desde ${event.price}€`}
                   </span>
                 </div>
 
@@ -319,12 +436,17 @@ export default async function EventDetailPage({
             <div className="mb-1.5 text-sm font-bold text-[#777]">ENTRADAS</div>
 
             <div className="mb-5 text-4xl font-extrabold sm:text-5xl">
-              {event.price === 0 ? "Gratis" : `${event.price}€`}
+              {event.isFree ? "Gratis" : `${event.price}€`}
             </div>
 
-            <button className="mb-3 w-full cursor-pointer rounded-[14px] border-none bg-[#111] px-[18px] py-4 text-base font-bold text-white transition hover:bg-[#222]">
+            <a
+              href={event.sourceUrl || "#"}
+              target={event.sourceUrl ? "_blank" : undefined}
+              rel={event.sourceUrl ? "noreferrer" : undefined}
+              className="mb-3 block w-full rounded-[14px] border-none bg-[#111] px-[18px] py-4 text-center text-base font-bold text-white no-underline transition hover:bg-[#222]"
+            >
               Comprar entrada
-            </button>
+            </a>
 
             <button className="mb-5 w-full cursor-pointer rounded-[14px] border border-[#ddd] bg-white px-[18px] py-4 text-base font-bold text-[#111] transition hover:bg-[#fafafa]">
               Guardar evento
@@ -358,7 +480,7 @@ export default async function EventDetailPage({
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
               {relatedEvents.map((item) => (
                 <Link
-                  key={item.slug}
+                  key={item.id}
                   href={`/eventos/${item.citySlug}/${item.pillarSlug}/${item.categorySlug}/${item.slug}`}
                   className="overflow-hidden rounded-[20px] border border-[#eee] bg-white no-underline shadow-[0_8px_20px_rgba(0,0,0,0.05)] transition hover:translate-y-[-2px]"
                 >
@@ -382,12 +504,12 @@ export default async function EventDetailPage({
 
                       <span
                         className={`rounded-full px-2.5 py-[7px] text-[13px] font-bold ${
-                          item.price === 0
+                          item.isFree
                             ? "bg-[#eaf8ee] text-[#1b8f3a]"
                             : "bg-[#f5f5f5] text-[#111]"
                         }`}
                       >
-                        {item.price === 0 ? "Gratis" : `Desde ${item.price}€`}
+                        {item.isFree ? "Gratis" : `Desde ${item.price}€`}
                       </span>
                     </div>
 
