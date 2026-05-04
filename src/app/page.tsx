@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
 import FiltersModal from "@/components/search/FiltersModal";
-import { events } from "@/data/events";
 import { normalizeText, searchLocations } from "@/lib/helpers";
+import { supabase } from "@/lib/supabase";
 import {
   addMonths,
   AppDateMode,
@@ -29,71 +29,95 @@ import {
 
 const localZoneSlug = "sevilla";
 
-const mostSearchedEvents = [
-  events.find((event) => event.slug === "concierto-de-vetusta-morla-2026-04-26"),
-  events.find((event) => event.slug === "sevilla-fc-vs-real-betis-2026-04-20"),
-  events.find((event) => event.slug === "festival-de-jazz-nocturno-2026-04-27"),
-  events.find((event) => event.slug === "partido-de-euroliga-2026-05-02"),
-  events.find((event) => event.slug === "monologo-de-comedia-2026-05-03"),
-  events.find((event) => event.slug === "carrera-popular-10k-2026-05-05"),
-].filter(Boolean);
-
-const latestInYourZone = events
-  .filter((event) => event.citySlug === localZoneSlug)
-  .sort((a, b) => b.id - a.id)
-  .slice(0, 6);
-
-const featuredCategories = [
-  {
-    label: "Conciertos",
-    emoji: "🎵",
-    href: "/eventos/sevilla/culturales/conciertos",
-  },
-  {
-    label: "Teatro",
-    emoji: "🎭",
-    href: "/eventos/sevilla/culturales/teatro",
-  },
-  {
-    label: "Deportes",
-    emoji: "⚽",
-    href: "/eventos/sevilla/deportivos",
-  },
-  {
-    label: "Festivales",
-    emoji: "🎉",
-    href: "/eventos/sevilla/culturales/festivales",
-  },
-];
-
-const sportsCategories = Array.from(
-  new Set(
-    events
-      .filter((event) => event.pillar === "Deportivos")
-      .map((event) => event.category)
-  )
-).sort((a, b) => a.localeCompare(b, "es"));
-
-const culturalCategories = Array.from(
-  new Set(
-    events
-      .filter((event) => event.pillar === "Culturales")
-      .map((event) => event.category)
-  )
-).sort((a, b) => a.localeCompare(b, "es"));
-
-const paidEventPrices = events
-  .filter((event) => !event.isFree && typeof event.price === "number")
-  .map((event) => event.price);
-
-const minEventPrice = paidEventPrices.length ? Math.min(...paidEventPrices) : 0;
-const maxEventPrice = paidEventPrices.length ? Math.max(...paidEventPrices) : 1000;
-
-type HomeEventCardProps = {
-  event: (typeof events)[number];
+type AppEvent = {
+  title: string;
+  slug: string;
+  city: string;
+  citySlug: string;
+  pillar: string;
+  pillarSlug: string;
+  category: string;
+  categorySlug: string;
+  eventDate: string;
+  date: string;
+  time: string;
+  place: string;
+  description: string;
+  isFree: boolean;
+  price?: number;
+  priceLabel: string;
+  image: string;
+  imageAlt: string;
+  imageLabel: string;
+  imageSubLabel: string;
+  lat?: number;
+  lng?: number;
 };
 
-function HomeEventCard({ event }: HomeEventCardProps) {
+type SupabaseEvent = {
+  id: string;
+  title: string | null;
+  slug: string | null;
+  city: string | null;
+  city_slug: string | null;
+  pillar: string | null;
+  pillar_slug: string | null;
+  category: string | null;
+  category_slug: string | null;
+  event_date: string | null;
+  time: string | null;
+  date: string | null;
+  place: string | null;
+  description: string | null;
+  is_free: boolean | null;
+  price: number | null;
+  price_label: string | null;
+  image: string | null;
+  image_alt: string | null;
+  image_label: string | null;
+  image_sub_label: string | null;
+  lat: number | null;
+  lng: number | null;
+  source_url: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+function mapSupabaseEvent(event: SupabaseEvent): AppEvent {
+  const isFree = Boolean(event.is_free);
+  const price = typeof event.price === "number" ? event.price : undefined;
+
+  return {
+    title: event.title || "Evento sin título",
+    slug: event.slug || event.id,
+    city: event.city || "",
+    citySlug: event.city_slug || "",
+    pillar: event.pillar || "Culturales",
+    pillarSlug: event.pillar_slug || "culturales",
+    category: event.category || "General",
+    categorySlug: event.category_slug || "general",
+    eventDate: event.event_date || "",
+    date: event.date || event.event_date || "",
+    time: event.time || "",
+    place: event.place || "",
+    description: event.description || "",
+    isFree,
+    price,
+    priceLabel:
+      event.price_label ||
+      (isFree ? "Gratis" : price ? `Desde ${price}€` : "Consultar precio"),
+    image:
+      event.image ||
+      "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1200&auto=format&fit=crop",
+    imageAlt: event.image_alt || event.title || "Evento",
+    imageLabel: event.image_label || event.title || "Evento",
+    imageSubLabel: event.image_sub_label || event.city || "",
+    lat: typeof event.lat === "number" ? event.lat : undefined,
+    lng: typeof event.lng === "number" ? event.lng : undefined,
+  };
+}
+
+function HomeEventCard({ event }: { event: AppEvent }) {
   return (
     <Link
       href={`/eventos/${event.citySlug}/${event.pillarSlug}/${event.categorySlug}/${event.slug}`}
@@ -137,17 +161,17 @@ function HomeEventCard({ event }: HomeEventCardProps) {
 
           <p className="mb-1 text-[15px] text-[#555]">
             <strong className="font-semibold text-[#222]">Localización:</strong>{" "}
-            {event.city}
+            {event.city || "Por confirmar"}
           </p>
 
           <p className="mb-1 text-[15px] text-[#555]">
             <strong className="font-semibold text-[#222]">Fecha:</strong>{" "}
-            {event.date}
+            {event.date || "Próximamente"}
           </p>
 
           <p className="line-clamp-1 text-[15px] text-[#555]">
             <strong className="font-semibold text-[#222]">Lugar:</strong>{" "}
-            {event.place}
+            {event.place || "Por confirmar"}
           </p>
         </div>
       </article>
@@ -155,11 +179,7 @@ function HomeEventCard({ event }: HomeEventCardProps) {
   );
 }
 
-function HorizontalEventRow({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function HorizontalEventRow({ children }: { children: React.ReactNode }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   function scrollByAmount(direction: "left" | "right") {
@@ -207,6 +227,9 @@ export default function HomePage() {
   const router = useRouter();
   const isDesktop = useIsDesktop();
 
+  const [events, setEvents] = useState<AppEvent[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+
   const [locationInput, setLocationInput] = useState("");
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -220,27 +243,145 @@ export default function HomePage() {
   const [selectedPillar, setSelectedPillar] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [onlyFree, setOnlyFree] = useState(false);
-  const [priceMin, setPriceMin] = useState(minEventPrice);
-  const [priceMax, setPriceMax] = useState(maxEventPrice);
 
-  const suggestions = useMemo(() => {
-    return searchLocations(locationInput, 8);
-  }, [locationInput]);
+  useEffect(() => {
+    async function loadEvents() {
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error cargando eventos en home:", error);
+        setEvents([]);
+        setIsLoadingEvents(false);
+        return;
+      }
+
+      setEvents((data || []).map((event) => mapSupabaseEvent(event as SupabaseEvent)));
+      setIsLoadingEvents(false);
+    }
+
+    loadEvents();
+  }, []);
+
+  const mostSearchedEvents = useMemo(() => events.slice(0, 8), [events]);
+
+  const latestInYourZone = useMemo(
+    () => events.filter((event) => event.citySlug === localZoneSlug).slice(0, 8),
+    [events]
+  );
+
+  const sportsCategories = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          events
+            .filter((event) => event.pillar === "Deportivos")
+            .map((event) => event.category)
+        )
+      ).sort((a, b) => a.localeCompare(b, "es")),
+    [events]
+  );
+
+  const culturalCategories = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          events
+            .filter((event) => event.pillar === "Culturales")
+            .map((event) => event.category)
+        )
+      ).sort((a, b) => a.localeCompare(b, "es")),
+    [events]
+  );
+
+  const paidEventPrices = useMemo(
+    () =>
+      events
+        .filter((event) => !event.isFree && typeof event.price === "number")
+        .map((event) => event.price as number),
+    [events]
+  );
+
+  const minEventPrice = paidEventPrices.length ? Math.min(...paidEventPrices) : 0;
+  const maxEventPrice = paidEventPrices.length ? Math.max(...paidEventPrices) : 1000;
+
+  const [priceMin, setPriceMin] = useState(0);
+  const [priceMax, setPriceMax] = useState(1000);
+
+  useEffect(() => {
+    setPriceMin(minEventPrice);
+    setPriceMax(maxEventPrice);
+  }, [minEventPrice, maxEventPrice]);
+
+  const featuredCategories = [
+    {
+      label: "Conciertos",
+      emoji: "🎵",
+      href: "/eventos/sevilla/culturales/conciertos",
+    },
+    {
+      label: "Teatro",
+      emoji: "🎭",
+      href: "/eventos/sevilla/culturales/teatro",
+    },
+    {
+      label: "Deportes",
+      emoji: "⚽",
+      href: "/eventos/sevilla/deportivos",
+    },
+    {
+      label: "Festivales",
+      emoji: "🎉",
+      href: "/eventos/sevilla/culturales/festivales",
+    },
+  ];
+
+  const suggestions = useMemo(() => searchLocations(locationInput, 8), [locationInput]);
 
   const exactMatch = useMemo(() => {
     const normalizedInput = normalizeText(locationInput);
-    return suggestions.find(
-      (item) => normalizeText(item.name) === normalizedInput
-    );
+    return suggestions.find((item) => normalizeText(item.name) === normalizedInput);
   }, [locationInput, suggestions]);
 
   const activeFiltersCount =
     (selectedPillar ? 1 : 0) +
     selectedCategories.length +
     (onlyFree ? 1 : 0) +
-    (!onlyFree && (priceMin !== minEventPrice || priceMax !== maxEventPrice)
-      ? 1
-      : 0);
+    (!onlyFree && (priceMin !== minEventPrice || priceMax !== maxEventPrice) ? 1 : 0);
+
+  function buildParams() {
+    const params = new URLSearchParams();
+
+    if (selectedDateMode === "hoy") {
+      params.set("fecha", "hoy");
+    } else if (selectedDateMode === "manana") {
+      params.set("fecha", "manana");
+    } else if (selectedDateMode === "calendario") {
+      if (dateFrom) params.set("fechaDesde", dateFrom);
+      if (dateTo) params.set("fechaHasta", dateTo);
+      else if (dateFrom) params.set("fechaHasta", dateFrom);
+    }
+
+    if (exactMatch) {
+      params.set("ubicacion", exactMatch.slug);
+      params.set("ubicacionNombre", exactMatch.name);
+    } else if (locationInput.trim()) {
+      params.set("ubicacionNombre", locationInput.trim());
+    }
+
+    if (selectedPillar) params.set("pillar", selectedPillar);
+    if (selectedCategories.length > 0) params.set("categorias", selectedCategories.join(","));
+    if (onlyFree) params.set("gratis", "1");
+
+    if (!onlyFree) {
+      if (priceMin !== minEventPrice) params.set("precioMin", String(priceMin));
+      if (priceMax !== maxEventPrice) params.set("precioMax", String(priceMax));
+    }
+
+    return params;
+  }
 
   function handleSelectLocation(name: string) {
     setLocationInput(name);
@@ -251,96 +392,14 @@ export default function HomePage() {
     setShowCalendar(false);
     setShowLocationSuggestions(false);
 
-    const params = new URLSearchParams();
-
-    if (selectedDateMode === "hoy") {
-      params.set("fecha", "hoy");
-    } else if (selectedDateMode === "manana") {
-      params.set("fecha", "manana");
-    } else if (selectedDateMode === "calendario") {
-      if (dateFrom) params.set("fechaDesde", dateFrom);
-      if (dateTo) {
-        params.set("fechaHasta", dateTo);
-      } else if (dateFrom) {
-        params.set("fechaHasta", dateFrom);
-      }
-    }
-
-    if (exactMatch) {
-      params.set("ubicacion", exactMatch.slug);
-      params.set("ubicacionNombre", exactMatch.name);
-    } else if (locationInput.trim()) {
-      params.set("ubicacionNombre", locationInput.trim());
-    }
-
-    if (selectedPillar) {
-      params.set("pillar", selectedPillar);
-    }
-
-    if (selectedCategories.length > 0) {
-      params.set("categorias", selectedCategories.join(","));
-    }
-
-    if (onlyFree) {
-      params.set("gratis", "1");
-    } else {
-      if (priceMin !== minEventPrice) {
-        params.set("precioMin", String(priceMin));
-      }
-      if (priceMax !== maxEventPrice) {
-        params.set("precioMax", String(priceMax));
-      }
-    }
-
-    const query = params.toString();
+    const query = buildParams().toString();
     router.push(query ? `/eventos?${query}` : "/eventos");
   }
 
   function applyFilters() {
-    const params = new URLSearchParams();
-
-    if (selectedDateMode === "hoy") {
-      params.set("fecha", "hoy");
-    } else if (selectedDateMode === "manana") {
-      params.set("fecha", "manana");
-    } else if (selectedDateMode === "calendario") {
-      if (dateFrom) params.set("fechaDesde", dateFrom);
-      if (dateTo) {
-        params.set("fechaHasta", dateTo);
-      } else if (dateFrom) {
-        params.set("fechaHasta", dateFrom);
-      }
-    }
-
-    if (exactMatch) {
-      params.set("ubicacion", exactMatch.slug);
-      params.set("ubicacionNombre", exactMatch.name);
-    } else if (locationInput.trim()) {
-      params.set("ubicacionNombre", locationInput.trim());
-    }
-
-    if (selectedPillar) {
-      params.set("pillar", selectedPillar);
-    }
-
-    if (selectedCategories.length > 0) {
-      params.set("categorias", selectedCategories.join(","));
-    }
-
-    if (onlyFree) {
-      params.set("gratis", "1");
-    } else {
-      if (priceMin !== minEventPrice) {
-        params.set("precioMin", String(priceMin));
-      }
-      if (priceMax !== maxEventPrice) {
-        params.set("precioMax", String(priceMax));
-      }
-    }
-
     setShowFilters(false);
 
-    const query = params.toString();
+    const query = buildParams().toString();
     router.push(query ? `/eventos?${query}` : "/eventos");
   }
 
@@ -441,7 +500,9 @@ export default function HomePage() {
                 Eventos más buscados
               </h2>
               <p className="m-0 text-[17px] text-[#666] sm:text-[18px]">
-                Una selección de los planes que más interés están generando ahora mismo.
+                {isLoadingEvents
+                  ? "Cargando eventos desde Supabase..."
+                  : "Una selección de los planes que más interés están generando ahora mismo."}
               </p>
             </div>
 
@@ -451,38 +512,36 @@ export default function HomePage() {
           </div>
 
           <HorizontalEventRow>
-            {mostSearchedEvents.map((event) => {
-              if (!event) return null;
-              return <HomeEventCard key={event.slug} event={event} />;
-            })}
-          </HorizontalEventRow>
-        </section>
-
-        <section className="mb-14">
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-            <div>
-              <h2 className="mb-2 mt-0 text-[30px] font-extrabold tracking-[-0.8px] sm:text-[38px]">
-                Últimas subidas en tu zona
-              </h2>
-              <p className="m-0 text-[17px] text-[#666] sm:text-[18px]">
-                Novedades recientes en Sevilla para que no se te escape nada.
-              </p>
-            </div>
-
-            <Link
-              href="/eventos/sevilla"
-              className="font-bold text-[#111] no-underline"
-            >
-              Ver Sevilla →
-            </Link>
-          </div>
-
-          <HorizontalEventRow>
-            {latestInYourZone.map((event) => (
-              <HomeEventCard key={event.slug} event={event} />
+            {mostSearchedEvents.map((event) => (
+              <HomeEventCard key={`${event.citySlug}-${event.slug}`} event={event} />
             ))}
           </HorizontalEventRow>
         </section>
+
+        {latestInYourZone.length > 0 && (
+          <section className="mb-14">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+              <div>
+                <h2 className="mb-2 mt-0 text-[30px] font-extrabold tracking-[-0.8px] sm:text-[38px]">
+                  Últimas subidas en tu zona
+                </h2>
+                <p className="m-0 text-[17px] text-[#666] sm:text-[18px]">
+                  Novedades recientes en Sevilla para que no se te escape nada.
+                </p>
+              </div>
+
+              <Link href="/eventos?ubicacion=sevilla&ubicacionNombre=Sevilla" className="font-bold text-[#111] no-underline">
+                Ver Sevilla →
+              </Link>
+            </div>
+
+            <HorizontalEventRow>
+              {latestInYourZone.map((event) => (
+                <HomeEventCard key={`${event.citySlug}-${event.slug}`} event={event} />
+              ))}
+            </HorizontalEventRow>
+          </section>
+        )}
 
         <section className="mb-14">
           <div className="mb-5">
