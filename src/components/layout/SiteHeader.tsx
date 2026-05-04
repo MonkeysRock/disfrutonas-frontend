@@ -332,7 +332,7 @@ export default function SiteHeader({
                 className="mt-4 flex h-[58px] w-full items-center justify-center gap-3 rounded-full border border-[#dddddd] bg-white px-5 text-[17px] font-extrabold text-[#111] shadow-[0_8px_24px_rgba(0,0,0,0.08)]"
               >
                 <span className="text-[20px]">⌕</span>
-                <span>Empieza a buscar</span>
+                <span>Localización del Evento</span>
               </button>
 
               {showFiltersButton && onOpenFilters && (
