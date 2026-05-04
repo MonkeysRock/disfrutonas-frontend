@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
 import type { AppDateMode } from "@/components/search/SearchHeader";
 import FiltersModal from "@/components/search/FiltersModal";
-import { events as fallbackEvents } from "@/data/events";
 import { normalizeText, searchLocations } from "@/lib/helpers";
 import { supabase } from "@/lib/supabase";
 import {
@@ -29,7 +28,30 @@ import {
   useOutsideClick,
 } from "@/lib/search-ui";
 
-type AppEvent = (typeof fallbackEvents)[number];
+type AppEvent = {
+  title: string;
+  slug: string;
+  city: string;
+  citySlug: string;
+  pillar: string;
+  pillarSlug: string;
+  category: string;
+  categorySlug: string;
+  eventDate: string;
+  date: string;
+  time: string;
+  place: string;
+  description: string;
+  isFree: boolean;
+  price?: number;
+  priceLabel: string;
+  image: string;
+  imageAlt: string;
+  imageLabel: string;
+  imageSubLabel: string;
+  lat?: number;
+  lng?: number;
+};
 
 type SupabaseEvent = {
   id: string;
@@ -61,6 +83,9 @@ type SupabaseEvent = {
 };
 
 function mapSupabaseEvent(event: SupabaseEvent): AppEvent {
+  const isFree = Boolean(event.is_free);
+  const price = typeof event.price === "number" ? event.price : undefined;
+
   return {
     title: event.title || "Evento sin título",
     slug: event.slug || event.id,
@@ -70,22 +95,23 @@ function mapSupabaseEvent(event: SupabaseEvent): AppEvent {
     pillarSlug: event.pillar_slug || "culturales",
     category: event.category || "General",
     categorySlug: event.category_slug || "general",
+    eventDate: event.event_date || "",
     date: event.date || event.event_date || "",
     time: event.time || "",
     place: event.place || "",
     description: event.description || "",
-    isFree: Boolean(event.is_free),
-    price: typeof event.price === "number" ? event.price : undefined,
-    priceLabel: event.price_label || (event.is_free ? "Gratis" : "Consultar precio"),
+    isFree,
+    price,
+    priceLabel: event.price_label || (isFree ? "Gratis" : price ? `Desde ${price}€` : "Consultar precio"),
     image:
       event.image ||
       "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1200&auto=format&fit=crop",
     imageAlt: event.image_alt || event.title || "Evento",
-    imageLabel: event.image_label || event.category || "Evento",
+    imageLabel: event.image_label || event.title || "Evento",
     imageSubLabel: event.image_sub_label || event.city || "",
     lat: typeof event.lat === "number" ? event.lat : undefined,
     lng: typeof event.lng === "number" ? event.lng : undefined,
-  } as AppEvent;
+  };
 }
 
 function resolveModeFromParams(
@@ -105,11 +131,7 @@ function EventResultCard({ event }: { event: AppEvent }) {
       href={`/eventos/${event.citySlug}/${event.pillarSlug}/${event.categorySlug}/${event.slug}`}
       className="block overflow-hidden rounded-[24px] border border-[#eee] bg-white text-[#111] no-underline shadow-[0_8px_24px_rgba(0,0,0,0.05)] transition hover:translate-y-[-2px]"
     >
-      <img
-        src={event.image}
-        alt={event.imageAlt}
-        className="block h-[220px] w-full object-cover"
-      />
+      <img src={event.image} alt={event.imageAlt} className="block h-[220px] w-full object-cover" />
 
       <div className="p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -125,9 +147,7 @@ function EventResultCard({ event }: { event: AppEvent }) {
 
           <span
             className={`rounded-full px-3 py-2 text-[12px] font-bold ${
-              event.isFree
-                ? "bg-[#eaf8ee] text-[#1b8f3a]"
-                : "bg-[#f5f5f5] text-[#111]"
+              event.isFree ? "bg-[#eaf8ee] text-[#1b8f3a]" : "bg-[#f5f5f5] text-[#111]"
             }`}
           >
             {event.priceLabel}
@@ -139,7 +159,7 @@ function EventResultCard({ event }: { event: AppEvent }) {
         </h3>
 
         <p className="mb-1 text-[15px] text-[#666]">
-          <strong className="text-[#222]">Ciudad:</strong> {event.city}
+          <strong className="text-[#222]">Ciudad:</strong> {event.city || "Por confirmar"}
         </p>
 
         <p className="mb-1 text-[15px] text-[#666]">
@@ -169,6 +189,7 @@ function EventsPageContent() {
 
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const [supabaseError, setSupabaseError] = useState<string | null>(null);
 
   const [locationInput, setLocationInput] = useState("");
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
@@ -184,18 +205,36 @@ function EventsPageContent() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [onlyFree, setOnlyFree] = useState(false);
 
+  const paidEventPrices = useMemo(
+    () =>
+      events
+        .filter((event) => !event.isFree && typeof event.price === "number")
+        .map((event) => event.price as number),
+    [events]
+  );
+
+  const minEventPrice = paidEventPrices.length ? Math.min(...paidEventPrices) : 0;
+  const maxEventPrice = paidEventPrices.length ? Math.max(...paidEventPrices) : 1000;
+
+  const [priceMin, setPriceMin] = useState(0);
+  const [priceMax, setPriceMax] = useState(1000);
+
   useEffect(() => {
     async function loadEvents() {
+      setIsLoadingEvents(true);
+      setSupabaseError(null);
+
       const { data, error } = await supabase
         .from("events")
         .select("*")
         .order("created_at", { ascending: false });
-        console.log("SUPABASE DATA:", data);
-console.log("SUPABASE ERROR:", error);
+
+      console.log("SUPABASE DATA:", data);
+      console.log("SUPABASE ERROR:", error);
 
       if (error) {
-        console.error("Error cargando eventos desde Supabase:", error);
-        setEvents(fallbackEvents);
+        setSupabaseError(error.message);
+        setEvents([]);
         setIsLoadingEvents(false);
         return;
       }
@@ -204,12 +243,17 @@ console.log("SUPABASE ERROR:", error);
         mapSupabaseEvent(event as SupabaseEvent)
       );
 
-      setEvents(mappedEvents.length > 0 ? mappedEvents : fallbackEvents);
+      setEvents(mappedEvents);
       setIsLoadingEvents(false);
     }
 
     loadEvents();
   }, []);
+
+  useEffect(() => {
+    setPriceMin(minEventPrice);
+    setPriceMax(maxEventPrice);
+  }, [minEventPrice, maxEventPrice]);
 
   const sportsCategories = useMemo(
     () =>
@@ -234,25 +278,6 @@ console.log("SUPABASE ERROR:", error);
       ).sort((a, b) => a.localeCompare(b, "es")),
     [events]
   );
-
-  const paidEventPrices = useMemo(
-    () =>
-      events
-        .filter((event) => !event.isFree && typeof event.price === "number")
-        .map((event) => event.price as number),
-    [events]
-  );
-
-  const minEventPrice = paidEventPrices.length ? Math.min(...paidEventPrices) : 0;
-  const maxEventPrice = paidEventPrices.length ? Math.max(...paidEventPrices) : 1000;
-
-  const [priceMin, setPriceMin] = useState(0);
-  const [priceMax, setPriceMax] = useState(1000);
-
-  useEffect(() => {
-    setPriceMin(minEventPrice);
-    setPriceMax(maxEventPrice);
-  }, [minEventPrice, maxEventPrice]);
 
   useEffect(() => {
     const fecha = searchParams.get("fecha");
@@ -317,9 +342,7 @@ console.log("SUPABASE ERROR:", error);
 
   const exactMatch = useMemo(() => {
     const normalizedInput = normalizeText(locationInput);
-    return suggestions.find(
-      (item) => normalizeText(item.name) === normalizedInput
-    );
+    return suggestions.find((item) => normalizeText(item.name) === normalizedInput);
   }, [locationInput, suggestions]);
 
   const filteredEvents = useMemo(() => {
@@ -340,18 +363,18 @@ console.log("SUPABASE ERROR:", error);
         ? matchesLocationFromParam
         : matchesLocationFromInput;
 
+      const eventDateForFilter = event.eventDate || event.date || "";
+
       const matchesDates =
         selectedDateMode === "none"
           ? true
           : selectedDateMode === "hoy"
-          ? matchesDateRange(event.slug, getTodayYmd(), getTodayYmd())
+          ? matchesDateRange(eventDateForFilter, getTodayYmd(), getTodayYmd())
           : selectedDateMode === "manana"
-          ? matchesDateRange(event.slug, getTomorrowYmd(), getTomorrowYmd())
-          : matchesDateRange(event.slug, dateFrom, dateTo || dateFrom);
+          ? matchesDateRange(eventDateForFilter, getTomorrowYmd(), getTomorrowYmd())
+          : matchesDateRange(eventDateForFilter, dateFrom, dateTo || dateFrom);
 
-      const matchesPillar = selectedPillar
-        ? event.pillar === selectedPillar
-        : true;
+      const matchesPillar = selectedPillar ? event.pillar === selectedPillar : true;
 
       const matchesCategory =
         selectedCategories.length > 0
@@ -400,11 +423,8 @@ console.log("SUPABASE ERROR:", error);
       params.set("fecha", "manana");
     } else if (selectedDateMode === "calendario") {
       if (dateFrom) params.set("fechaDesde", dateFrom);
-      if (dateTo) {
-        params.set("fechaHasta", dateTo);
-      } else if (dateFrom) {
-        params.set("fechaHasta", dateFrom);
-      }
+      if (dateTo) params.set("fechaHasta", dateTo);
+      else if (dateFrom) params.set("fechaHasta", dateFrom);
     }
 
     if (includeLocation) {
@@ -416,23 +436,13 @@ console.log("SUPABASE ERROR:", error);
       }
     }
 
-    if (selectedPillar) {
-      params.set("pillar", selectedPillar);
-    }
+    if (selectedPillar) params.set("pillar", selectedPillar);
+    if (selectedCategories.length > 0) params.set("categorias", selectedCategories.join(","));
+    if (onlyFree) params.set("gratis", "1");
 
-    if (selectedCategories.length > 0) {
-      params.set("categorias", selectedCategories.join(","));
-    }
-
-    if (onlyFree) {
-      params.set("gratis", "1");
-    } else {
-      if (priceMin !== minEventPrice) {
-        params.set("precioMin", String(priceMin));
-      }
-      if (priceMax !== maxEventPrice) {
-        params.set("precioMax", String(priceMax));
-      }
+    if (!onlyFree) {
+      if (priceMin !== minEventPrice) params.set("precioMin", String(priceMin));
+      if (priceMax !== maxEventPrice) params.set("precioMax", String(priceMax));
     }
 
     return params;
@@ -498,9 +508,7 @@ console.log("SUPABASE ERROR:", error);
     (selectedPillar ? 1 : 0) +
     selectedCategories.length +
     (onlyFree ? 1 : 0) +
-    (!onlyFree && (priceMin !== minEventPrice || priceMax !== maxEventPrice)
-      ? 1
-      : 0);
+    (!onlyFree && (priceMin !== minEventPrice || priceMax !== maxEventPrice) ? 1 : 0);
 
   return (
     <main className="min-h-screen bg-white text-[#111]">
@@ -587,10 +595,7 @@ console.log("SUPABASE ERROR:", error);
           )}
 
           {selectedCategories.map((category) => (
-            <span
-              key={category}
-              className="rounded-full bg-[#f5f5f5] px-4 py-2 text-sm font-semibold text-[#111]"
-            >
+            <span key={category} className="rounded-full bg-[#f5f5f5] px-4 py-2 text-sm font-semibold text-[#111]">
               {category}
             </span>
           ))}
@@ -600,13 +605,6 @@ console.log("SUPABASE ERROR:", error);
               Gratis
             </span>
           )}
-
-          {!onlyFree &&
-            (priceMin !== minEventPrice || priceMax !== maxEventPrice) && (
-              <span className="rounded-full bg-[#f5f5f5] px-4 py-2 text-sm font-semibold text-[#111]">
-                {priceMin}€ - {priceMax}€
-              </span>
-            )}
 
           {(locationInput ||
             activeDateLabel ||
@@ -629,24 +627,28 @@ console.log("SUPABASE ERROR:", error);
           <h1 className="mb-2 text-[34px] font-extrabold tracking-[-0.8px] sm:text-[44px]">
             {isLoadingEvents
               ? "Cargando eventos..."
-              : `${filteredEvents.length} evento${
-                  filteredEvents.length === 1 ? "" : "s"
-                } encontrados`}
+              : `${filteredEvents.length} evento${filteredEvents.length === 1 ? "" : "s"} encontrados`}
           </h1>
 
           <p className="m-0 text-[17px] text-[#666] sm:text-[18px]">
-            Resultados actualizados según tu destino, fechas y filtros.
+            Resultados cargados desde Supabase.
           </p>
+
+          {supabaseError && (
+            <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+              Error Supabase: {supabaseError}
+            </p>
+          )}
         </div>
 
         {!isLoadingEvents && filteredEvents.length === 0 ? (
           <section className="rounded-[28px] border border-[#eee] bg-white p-8 shadow-[0_10px_24px_rgba(0,0,0,0.04)]">
             <h2 className="mb-3 text-[28px] font-extrabold tracking-[-0.6px]">
-              No hay resultados con esos filtros
+              No hay eventos cargados desde Supabase
             </h2>
             <p className="mb-5 max-w-[760px] text-[17px] leading-8 text-[#666]">
-              Prueba con otra ciudad, amplía el rango de fechas o ajusta los filtros
-              para ver más eventos disponibles.
+              Ahora mismo la web no está usando los eventos de prueba. Si ves esto en producción,
+              significa que Supabase está devolviendo 0 filas o hay un problema de conexión.
             </p>
 
             <button
@@ -654,13 +656,13 @@ console.log("SUPABASE ERROR:", error);
               onClick={clearAllFilters}
               className="inline-flex rounded-[16px] bg-[#111] px-5 py-3 font-bold text-white"
             >
-              Ver todos los eventos
+              Limpiar filtros
             </button>
           </section>
         ) : (
           <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
             {filteredEvents.map((event) => (
-              <EventResultCard key={event.slug} event={event} />
+              <EventResultCard key={`${event.citySlug}-${event.slug}`} event={event} />
             ))}
           </section>
         )}
