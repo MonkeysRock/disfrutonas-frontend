@@ -352,9 +352,7 @@ export default async function EventDetailPage({
                   </span>
                 </div>
 
-                <p className="mb-2 text-sm font-bold uppercase tracking-[0.08em] text-white/80">
-                  Evento destacado
-                </p>
+               
 
                 <h1 className="m-0 max-w-[900px] text-3xl font-extrabold leading-tight text-white sm:text-5xl lg:text-6xl">
                   {event.title}
