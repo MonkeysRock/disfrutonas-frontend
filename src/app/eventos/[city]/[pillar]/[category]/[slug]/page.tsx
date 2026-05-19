@@ -416,10 +416,9 @@ export default async function EventDetailPage({
 
               <div>
                 <h2 className="mb-4 mt-0 text-[28px] sm:text-[30px]">
-                  Más info sobre {event.title}
-{event.city ? ` en ${event.city}` : ""}
-{event.date ? ` el ${event.date}` : ""}
-                </h2>
+  {event.title}
+  {event.date ? ` ${event.date}` : ""}
+</h2>
 
                 <div className="space-y-5 text-base leading-8 text-[#555] sm:text-lg">
                   {narrativeBlocks.map((paragraph, index) => (

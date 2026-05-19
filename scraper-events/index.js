@@ -16,6 +16,13 @@ function cleanText(text) {
   return String(text || "").replace(/\s+/g, " ").trim();
 }
 
+function cleanEventTitle(title) {
+  return cleanText(title)
+    .replace(/^consigue tus entradas para\s+/i, "")
+    .replace(/^entradas para\s+/i, "")
+    .trim();
+}
+
 function slugify(text) {
   return cleanText(text)
     .toLowerCase()
@@ -96,10 +103,12 @@ async function getEventDetail(url) {
     const html = await getHtml(url);
     const $ = cheerio.load(html);
 
-    const title =
+    const rawTitle =
       cleanText($("meta[property='og:title']").attr("content")) ||
       cleanText($("meta[name='twitter:title']").attr("content")) ||
       cleanText($("h1").first().text());
+
+    const title = cleanEventTitle(rawTitle);
 
     const description =
       cleanText($("meta[name='description']").attr("content")) ||
@@ -184,7 +193,9 @@ function extractEventsFromPage(html, pageUrl) {
 
     if (startIndex <= 0) continue;
 
-    const title = lines[startIndex - 1];
+    const rawTitle = lines[startIndex - 1];
+    const title = cleanEventTitle(rawTitle);
+
     const startDate = parseDate(lines[startIndex]);
     const locationText = lines[startIndex + 2] || "";
     const priceLine = lines.find((line) => line.startsWith("Desde")) || "";
@@ -308,14 +319,14 @@ async function scrape() {
         const detail = await getEventDetail(detailUrl);
 
         if (detail.title) {
-          event.title = detail.title;
-          event.image_alt = detail.title;
-          event.image_sub_label = detail.title;
-          event.slug = slugify(`${detail.title}-${event.event_date}-${event.city}`);
+          event.title = cleanEventTitle(detail.title);
+          event.image_alt = event.title;
+          event.image_sub_label = event.title;
+          event.slug = slugify(`${event.title}-${event.event_date}-${event.city}`);
         }
 
         if (detail.description) {
-          event.description = detail.description;
+          event.description = cleanEventTitle(detail.description);
         }
 
         if (detail.image) {
