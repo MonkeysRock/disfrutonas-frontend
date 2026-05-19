@@ -357,11 +357,11 @@ export default async function EventDetailPage({
                 </p>
 
                 <h1 className="m-0 max-w-[900px] text-3xl font-extrabold leading-tight text-white sm:text-5xl lg:text-6xl">
-                  {event.imageLabel}
+                  {event.title}
                 </h1>
 
                 <p className="mb-0 mt-3 text-base font-medium text-white/90 sm:text-lg">
-                  {event.imageSubLabel}
+                  {event.city ? `${event.category} en ${event.city}` : event.category}
                 </p>
               </div>
             </div>
@@ -418,7 +418,9 @@ export default async function EventDetailPage({
 
               <div>
                 <h2 className="mb-4 mt-0 text-[28px] sm:text-[30px]">
-                  Sobre el evento
+                  Más info sobre {event.title}
+{event.city ? ` en ${event.city}` : ""}
+{event.date ? ` el ${event.date}` : ""}
                 </h2>
 
                 <div className="space-y-5 text-base leading-8 text-[#555] sm:text-lg">

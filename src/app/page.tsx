@@ -479,7 +479,7 @@ export default function HomePage() {
         <section className="mb-14">
           <div className="mx-auto max-w-[980px] text-center">
             <div className="mb-4 inline-block rounded-full bg-[#ffe5ef] px-4 py-2 text-sm font-bold text-[#e91e63]">
-              Encuentra planes en tu ciudad o pueblo
+              Encuentra planes de todo tipo
             </div>
 
             <h1 className="mx-auto mb-4 max-w-[920px] text-[42px] font-extrabold leading-[0.96] tracking-[-1.4px] sm:text-[56px] lg:text-[72px]">
