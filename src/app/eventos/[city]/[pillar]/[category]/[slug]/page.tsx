@@ -371,14 +371,16 @@ export default async function EventDetailPage({
                 </div>
 
                 <div className="overflow-hidden rounded-[22px] border border-[#eee] shadow-[0_6px_18px_rgba(0,0,0,0.04)]">
-                  <iframe
-                    title={`Mapa de ${event.place}`}
-                    src={`https://www.google.com/maps?q=${event.lat},${event.lng}&z=15&output=embed`}
-                    width="100%"
-                    height="320"
-                    style={{ border: 0 }}
-                    loading="lazy"
-                  />
+                 <iframe
+  title={`Mapa de ${event.place}`}
+  src={`https://www.google.com/maps?q=${encodeURIComponent(
+    `${event.place}, ${event.city}, España`
+  )}&z=15&output=embed`}
+  width="100%"
+  height="320"
+  style={{ border: 0 }}
+  loading="lazy"
+/>
                 </div>
 
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -387,7 +389,9 @@ export default async function EventDetailPage({
                   </p>
 
                   <a
-                    href={`https://www.google.com/maps?q=${event.lat},${event.lng}`}
+                    href={`https://www.google.com/maps?q=${encodeURIComponent(
+  `${event.place}, ${event.city}, España`
+)}`}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-block text-sm font-bold text-[#1565c0] no-underline"
