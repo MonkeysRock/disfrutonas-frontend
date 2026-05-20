@@ -60,22 +60,77 @@ function parseLocation(locationText, title) {
     .map(cleanText)
     .filter(Boolean);
 
+  const knownCities = [
+    "Madrid",
+    "Barcelona",
+    "Valencia",
+    "Sevilla",
+    "Málaga",
+    "Bilbao",
+    "Zaragoza",
+    "Murcia",
+    "Alicante",
+    "Córdoba",
+    "Granada",
+    "Cáceres",
+    "Santander",
+    "Palma",
+    "A Coruña",
+    "Vigo",
+    "Valladolid",
+    "Pamplona",
+    "Gijón",
+    "Oviedo",
+    "Tarragona",
+    "Girona",
+    "Lleida",
+    "Toledo",
+    "Jaén",
+    "Almería",
+    "Huelva",
+    "Cádiz",
+    "Badajoz",
+    "Burgos",
+    "Salamanca",
+    "León",
+    "Logroño",
+    "Castellón",
+    "Fuengirola",
+    "Pals",
+    "Arcos de la Frontera",
+    "Palafrugell",
+    "Calella de Palafrugell",
+    "Barañáin",
+    "Las Palmas de Gran Canaria",
+    "Santa Maria de Palautordera",
+  ];
+
+  const normalize = (value) => slugify(value);
+
   let city = null;
   let place = null;
 
-  const titleCityMatch = title.match(/\ben\s+(.+)$/i);
-  if (titleCityMatch) city = cleanText(titleCityMatch[1]);
+  const cityFromLocation = parts.find((part) =>
+    knownCities.some((cityName) => normalize(part) === normalize(cityName))
+  );
 
-  if (!city && parts.length) city = parts[parts.length - 1];
-
-  if (parts.length >= 2) {
-    place = parts[1];
+  if (cityFromLocation) {
+    city = cityFromLocation;
   } else {
-    place = parts[0] || city;
+    const cityFromTitle = knownCities.find((cityName) =>
+      normalize(title).includes(`en-${normalize(cityName)}`)
+    );
+
+    city = cityFromTitle || parts[parts.length - 1] || null;
   }
 
+  place =
+    parts.find((part) => normalize(part) !== normalize(city)) ||
+    city ||
+    "Lugar por confirmar";
+
   if (place?.toLowerCase().startsWith("desde")) {
-    place = parts[0] || city;
+    place = city || "Lugar por confirmar";
   }
 
   return {

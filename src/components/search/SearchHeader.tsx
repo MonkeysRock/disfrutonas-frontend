@@ -90,6 +90,10 @@ export default function SearchHeader({
   const locationDropdownRef = useRef<HTMLDivElement | null>(null);
   const calendarDropdownRef = useRef<HTMLDivElement | null>(null);
 
+  const cleanLocationInput = locationInput.trim();
+  const shouldShowLocationDropdown =
+    showLocationSuggestions && cleanLocationInput.length > 0;
+
   useOutsideClick(wrapperRef, () => {
     setShowLocationSuggestions(false);
     setShowCalendar(false);
@@ -167,8 +171,12 @@ export default function SearchHeader({
     }
 
     return compact
-      ? `${formatShortSpanishDate(parseYmd(dateFrom))} - ${formatShortSpanishDate(parseYmd(dateTo))}`
-      : `${formatLongSpanishDate(parseYmd(dateFrom))} — ${formatLongSpanishDate(parseYmd(dateTo))}`;
+      ? `${formatShortSpanishDate(parseYmd(dateFrom))} - ${formatShortSpanishDate(
+          parseYmd(dateTo)
+        )}`
+      : `${formatLongSpanishDate(parseYmd(dateFrom))} — ${formatLongSpanishDate(
+          parseYmd(dateTo)
+        )}`;
   }
 
   return (
@@ -198,11 +206,13 @@ export default function SearchHeader({
             value={locationInput}
             onChange={(e) => {
               setLocationInput(e.target.value);
-              setShowLocationSuggestions(true);
+              setShowLocationSuggestions(e.target.value.trim().length > 0);
               setShowCalendar(false);
             }}
             onFocus={() => {
-              setShowLocationSuggestions(true);
+              if (locationInput.trim().length > 0) {
+                setShowLocationSuggestions(true);
+              }
               setShowCalendar(false);
             }}
             onKeyDown={(e) => {
@@ -222,7 +232,7 @@ export default function SearchHeader({
             }`}
           />
 
-          {showLocationSuggestions && (
+          {shouldShowLocationDropdown && (
             <div
               ref={locationDropdownRef}
               onMouseDown={(e) => e.stopPropagation()}
@@ -234,7 +244,7 @@ export default function SearchHeader({
                   No hemos encontrado esa localización.
                 </div>
               ) : (
-                suggestions.map((location) => (
+                suggestions.slice(0, 8).map((location) => (
                   <button
                     key={location.slug}
                     type="button"
@@ -249,9 +259,7 @@ export default function SearchHeader({
                       <div className="mb-1 truncate text-[17px] font-bold text-[#111]">
                         {location.name}
                       </div>
-                      <div className="truncate text-[14px] text-[#777]">
-                        {location.province} · {location.region}
-                      </div>
+                      
                     </div>
                   </button>
                 ))
