@@ -1,3 +1,5 @@
+import { KNOWN_CITIES } from "./cities.js";
+
 export type LocationItem = {
   name: string;
   slug: string;
@@ -6,362 +8,43 @@ export type LocationItem = {
   type: "city" | "town";
 };
 
-export const locations: LocationItem[] = [
-  {
-    name: "Madrid",
-    slug: "madrid",
-    province: "Madrid",
-    region: "Comunidad de Madrid",
-    type: "city",
-  },
-  {
-    name: "Barcelona",
-    slug: "barcelona",
-    province: "Barcelona",
-    region: "Cataluña",
-    type: "city",
-  },
-  {
-    name: "Valencia",
-    slug: "valencia",
-    province: "Valencia",
-    region: "Comunidad Valenciana",
-    type: "city",
-  },
-  {
-    name: "Sevilla",
-    slug: "sevilla",
-    province: "Sevilla",
-    region: "Andalucía",
-    type: "city",
-  },
-  {
-    name: "Zaragoza",
-    slug: "zaragoza",
-    province: "Zaragoza",
-    region: "Aragón",
-    type: "city",
-  },
-  {
-    name: "Málaga",
-    slug: "malaga",
-    province: "Málaga",
-    region: "Andalucía",
-    type: "city",
-  },
-  {
-    name: "Murcia",
-    slug: "murcia",
-    province: "Murcia",
-    region: "Región de Murcia",
-    type: "city",
-  },
-  {
-    name: "Palma",
-    slug: "palma",
-    province: "Islas Baleares",
-    region: "Islas Baleares",
-    type: "city",
-  },
-  {
-    name: "Bilbao",
-    slug: "bilbao",
-    province: "Bizkaia",
-    region: "País Vasco",
-    type: "city",
-  },
-  {
-    name: "Alicante",
-    slug: "alicante",
-    province: "Alicante",
-    region: "Comunidad Valenciana",
-    type: "city",
-  },
-  {
-    name: "Córdoba",
-    slug: "cordoba",
-    province: "Córdoba",
-    region: "Andalucía",
-    type: "city",
-  },
-  {
-    name: "Valladolid",
-    slug: "valladolid",
-    province: "Valladolid",
-    region: "Castilla y León",
-    type: "city",
-  },
-  {
-    name: "Vigo",
-    slug: "vigo",
-    province: "Pontevedra",
-    region: "Galicia",
-    type: "city",
-  },
-  {
-    name: "Gijón",
-    slug: "gijon",
-    province: "Asturias",
-    region: "Asturias",
-    type: "city",
-  },
-  {
-    name: "Granada",
-    slug: "granada",
-    province: "Granada",
-    region: "Andalucía",
-    type: "city",
-  },
-  {
-    name: "Oviedo",
-    slug: "oviedo",
-    province: "Asturias",
-    region: "Asturias",
-    type: "city",
-  },
-  {
-    name: "Cartagena",
-    slug: "cartagena",
-    province: "Murcia",
-    region: "Región de Murcia",
-    type: "city",
-  },
-  {
-    name: "Terrassa",
-    slug: "terrassa",
-    province: "Barcelona",
-    region: "Cataluña",
-    type: "city",
-  },
-  {
-    name: "Jerez de la Frontera",
-    slug: "jerez-de-la-frontera",
-    province: "Cádiz",
-    region: "Andalucía",
-    type: "city",
-  },
-  {
-    name: "Sabadell",
-    slug: "sabadell",
-    province: "Barcelona",
-    region: "Cataluña",
-    type: "city",
-  },
-  {
-    name: "Móstoles",
-    slug: "mostoles",
-    province: "Madrid",
-    region: "Comunidad de Madrid",
-    type: "city",
-  },
-  {
-    name: "Pamplona",
-    slug: "pamplona",
-    province: "Navarra",
-    region: "Navarra",
-    type: "city",
-  },
-  {
-    name: "Almería",
-    slug: "almeria",
-    province: "Almería",
-    region: "Andalucía",
-    type: "city",
-  },
-  {
-    name: "Alcalá de Henares",
-    slug: "alcala-de-henares",
-    province: "Madrid",
-    region: "Comunidad de Madrid",
-    type: "city",
-  },
-  {
-    name: "Fuenlabrada",
-    slug: "fuenlabrada",
-    province: "Madrid",
-    region: "Comunidad de Madrid",
-    type: "city",
-  },
-  {
-    name: "Leganés",
-    slug: "leganes",
-    province: "Madrid",
-    region: "Comunidad de Madrid",
-    type: "city",
-  },
-  {
-    name: "Getafe",
-    slug: "getafe",
-    province: "Madrid",
-    region: "Comunidad de Madrid",
-    type: "city",
-  },
-  {
-    name: "Burgos",
-    slug: "burgos",
-    province: "Burgos",
-    region: "Castilla y León",
-    type: "city",
-  },
-  {
-    name: "Albacete",
-    slug: "albacete",
-    province: "Albacete",
-    region: "Castilla-La Mancha",
-    type: "city",
-  },
-  {
-    name: "Santander",
-    slug: "santander",
-    province: "Cantabria",
-    region: "Cantabria",
-    type: "city",
-  },
-  {
-    name: "Logroño",
-    slug: "logrono",
-    province: "La Rioja",
-    region: "La Rioja",
-    type: "city",
-  },
-  {
-    name: "Badajoz",
-    slug: "badajoz",
-    province: "Badajoz",
-    region: "Extremadura",
-    type: "city",
-  },
-  {
-    name: "Salamanca",
-    slug: "salamanca",
-    province: "Salamanca",
-    region: "Castilla y León",
-    type: "city",
-  },
-  {
-    name: "Huelva",
-    slug: "huelva",
-    province: "Huelva",
-    region: "Andalucía",
-    type: "city",
-  },
-  {
-    name: "Tarragona",
-    slug: "tarragona",
-    province: "Tarragona",
-    region: "Cataluña",
-    type: "city",
-  },
-  {
-    name: "León",
-    slug: "leon",
-    province: "León",
-    region: "Castilla y León",
-    type: "city",
-  },
-  {
-    name: "Cádiz",
-    slug: "cadiz",
-    province: "Cádiz",
-    region: "Andalucía",
-    type: "city",
-  },
-  {
-    name: "Jaén",
-    slug: "jaen",
-    province: "Jaén",
-    region: "Andalucía",
-    type: "city",
-  },
-  {
-    name: "Girona",
-    slug: "girona",
-    province: "Girona",
-    region: "Cataluña",
-    type: "city",
-  },
-  {
-    name: "Santiago de Compostela",
-    slug: "santiago-de-compostela",
-    province: "A Coruña",
-    region: "Galicia",
-    type: "city",
-  },
-  {
-    name: "Cáceres",
-    slug: "caceres",
-    province: "Cáceres",
-    region: "Extremadura",
-    type: "city",
-  },
-  {
-    name: "Toledo",
-    slug: "toledo",
-    province: "Toledo",
-    region: "Castilla-La Mancha",
-    type: "city",
-  },
-  {
-    name: "Fuengirola",
-    slug: "fuengirola",
-    province: "Málaga",
-    region: "Andalucía",
-    type: "town",
-  },
-  {
-    name: "Marbella",
-    slug: "marbella",
-    province: "Málaga",
-    region: "Andalucía",
-    type: "town",
-  },
-  {
-    name: "Dos Hermanas",
-    slug: "dos-hermanas",
-    province: "Sevilla",
-    region: "Andalucía",
-    type: "town",
-  },
-  {
-    name: "Benidorm",
-    slug: "benidorm",
-    province: "Alicante",
-    region: "Comunidad Valenciana",
-    type: "town",
-  },
-  {
-    name: "Sitges",
-    slug: "sitges",
-    province: "Barcelona",
-    region: "Cataluña",
-    type: "town",
-  },
-  {
-    name: "Ibiza",
-    slug: "ibiza",
-    province: "Islas Baleares",
-    region: "Islas Baleares",
-    type: "town",
-  },
-  {
-    name: "San Sebastián",
-    slug: "san-sebastian",
-    province: "Gipuzkoa",
-    region: "País Vasco",
-    type: "city",
-  },
-  {
-    name: "Lugo",
-    slug: "lugo",
-    province: "Lugo",
-    region: "Galicia",
-    type: "city",
-  },
-  {
-    name: "Ourense",
-    slug: "ourense",
-    province: "Ourense",
-    region: "Galicia",
-    type: "city",
-  },
-];
+function slugifyLocation(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export const locations: LocationItem[] = KNOWN_CITIES.map((name) => ({
+  name,
+  slug: slugifyLocation(name),
+  province: "",
+  region: "",
+  type: "city",
+}));
+
+export function normalizeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+export function searchLocations(
+  query: string,
+  limit = 8
+): LocationItem[] {
+  const normalizedQuery = normalizeText(query);
+
+  if (!normalizedQuery) return [];
+
+  return locations
+    .filter((location) => {
+      const normalizedName = normalizeText(location.name);
+      return normalizedName.includes(normalizedQuery);
+    })
+    .slice(0, limit);
+}
