@@ -8,6 +8,7 @@ import type { AppDateMode } from "@/components/search/SearchHeader";
 import FiltersModal from "@/components/search/FiltersModal";
 import { normalizeText, searchLocations } from "@/lib/helpers";
 import { supabase } from "@/lib/supabase";
+import { getTodayLocalISO } from "@/lib/date";
 import {
   addMonths,
   dayStart,
@@ -223,11 +224,14 @@ function EventsPageContent() {
     async function loadEvents() {
       setIsLoadingEvents(true);
       setSupabaseError(null);
+      const today = getTodayLocalISO();
 
-      const { data, error } = await supabase
-        .from("events")
-        .select("*")
-        .order("created_at", { ascending: false });
+ const { data, error } = await supabase
+  .from("events")
+  .select("*")
+  .gte("event_date", today)
+  .order("event_date", { ascending: true })
+  .order("created_at", { ascending: false });
 
       console.log("SUPABASE DATA:", data);
       console.log("SUPABASE ERROR:", error);

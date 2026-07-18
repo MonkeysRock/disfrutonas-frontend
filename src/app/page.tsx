@@ -7,6 +7,7 @@ import SiteHeader from "@/components/layout/SiteHeader";
 import FiltersModal from "@/components/search/FiltersModal";
 import { normalizeText, searchLocations } from "@/lib/helpers";
 import { supabase } from "@/lib/supabase";
+import { getTodayLocalISO } from "@/lib/date";
 import {
   addMonths,
   AppDateMode,
@@ -246,10 +247,14 @@ export default function HomePage() {
 
   useEffect(() => {
     async function loadEvents() {
-      const { data, error } = await supabase
-        .from("events")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const today = getTodayLocalISO();
+
+  const { data, error } = await supabase
+    .from("events")
+    .select("*")
+    .gte("event_date", today)
+    .order("event_date", { ascending: true })
+    .order("created_at", { ascending: false });
 
       if (error) {
         console.error("Error cargando eventos en home:", error);
