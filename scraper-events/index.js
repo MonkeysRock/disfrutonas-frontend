@@ -1,6 +1,10 @@
 import "dotenv/config";
 import axios from "axios";
 import * as cheerio from "cheerio";
+import {
+  CITY_SEARCH_NAMES,
+  getCanonicalCityName,
+} from "./data/cities.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -100,50 +104,7 @@ function parseLocation(locationText, title) {
     .map(cleanText)
     .filter(Boolean);
 
-  const knownCities = [
-    "Madrid",
-    "Barcelona",
-    "Valencia",
-    "Sevilla",
-    "Málaga",
-    "Bilbao",
-    "Zaragoza",
-    "Murcia",
-    "Alicante",
-    "Córdoba",
-    "Granada",
-    "Cáceres",
-    "Santander",
-    "Palma",
-    "A Coruña",
-    "Vigo",
-    "Valladolid",
-    "Pamplona",
-    "Gijón",
-    "Oviedo",
-    "Tarragona",
-    "Girona",
-    "Lleida",
-    "Toledo",
-    "Jaén",
-    "Almería",
-    "Huelva",
-    "Cádiz",
-    "Badajoz",
-    "Burgos",
-    "Salamanca",
-    "León",
-    "Logroño",
-    "Castellón",
-    "Fuengirola",
-    "Pals",
-    "Arcos de la Frontera",
-    "Palafrugell",
-    "Calella de Palafrugell",
-    "Barañáin",
-    "Las Palmas de Gran Canaria",
-    "Santa Maria de Palautordera",
-  ];
+  const knownCities = CITY_SEARCH_NAMES;
 
   const normalize = (value) => slugify(value);
 
@@ -172,6 +133,8 @@ function parseLocation(locationText, title) {
   if (place?.toLowerCase().startsWith("desde")) {
     place = city || "Lugar por confirmar";
   }
+
+  city = getCanonicalCityName(city);
 
   return {
     city,
