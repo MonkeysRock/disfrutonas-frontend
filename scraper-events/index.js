@@ -32,14 +32,51 @@ function slugify(text) {
     .replace(/(^-|-$)/g, "");
 }
 
+function extractSourceId(url) {
+  try {
+    const parsed = new URL(url);
+
+    return parsed.pathname.replace(/\/+$/, "").toLowerCase();
+  } catch {
+    return slugify(url);
+  }
+}
+
+function normalizeForFingerprint(value) {
+  return cleanText(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\bconsigue tus entradas para\b/g, "")
+    .replace(/\bentradas para\b/g, "")
+    .replace(/\bentradas?\b/g, "")
+    .replace(/\ben concierto\b/g, "")
+    .replace(/\btour\b/g, "")
+    .replace(/\bgira\b/g, "")
+    .replace(/\bshow\b/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function buildEventFingerprint(event) {
+  return [
+    normalizeForFingerprint(event.title),
+    event.event_date || "",
+    normalizeForFingerprint(event.city),
+    normalizeForFingerprint(event.place),
+  ].join("|");
+}
+
 function absoluteUrl(href) {
   if (!href) return null;
   if (href.startsWith("http")) return href;
+
   return new URL(href, BASE_URL).toString();
 }
 
 function parseDate(text) {
   const match = String(text || "").match(/(\d{2})-(\d{2})-(\d{2,4})/);
+
   if (!match) return null;
 
   const day = match[1];
@@ -50,7 +87,10 @@ function parseDate(text) {
 }
 
 function parsePrice(text) {
-  const match = String(text || "").replace(",", ".").match(/(\d+(?:\.\d+)?)/);
+  const match = String(text || "")
+    .replace(",", ".")
+    .match(/(\d+(?:\.\d+)?)/);
+
   return match ? Number(match[1]) : null;
 }
 
@@ -140,6 +180,15 @@ function parseLocation(locationText, title) {
   };
 }
 
+function getSupabaseHeaders(extraHeaders = {}) {
+  return {
+    apikey: SUPABASE_KEY,
+    Authorization: `Bearer ${SUPABASE_KEY}`,
+    "Content-Type": "application/json",
+    ...extraHeaders,
+  };
+}
+
 async function getHtml(url) {
   const { data } = await axios.get(url, {
     timeout: 25000,
@@ -194,6 +243,7 @@ async function getEventDetail(url) {
     };
   } catch (error) {
     console.log("⚠️ No pude leer detalle:", url, error.message);
+
     return {};
   }
 }
@@ -210,15 +260,19 @@ function getCandidateCards($) {
     if (!text.includes("Desde")) return;
     if (!text.includes("ENTRADAS")) return;
 
-    const childHasSame = $el.children().toArray().some((child) => {
-      const childText = cleanText($(child).text());
-      return (
-        childText.includes("Inicio") &&
-        childText.includes("Fin") &&
-        childText.includes("Desde") &&
-        childText.includes("ENTRADAS")
-      );
-    });
+    const childHasSame = $el
+      .children()
+      .toArray()
+      .some((child) => {
+        const childText = cleanText($(child).text());
+
+        return (
+          childText.includes("Inicio") &&
+          childText.includes("Fin") &&
+          childText.includes("Desde") &&
+          childText.includes("ENTRADAS")
+        );
+      });
 
     if (childHasSame) return;
 
@@ -284,7 +338,7 @@ function extractEventsFromPage(html, pageUrl) {
 
     const eventSlug = slugify(`${title}-${startDate}-${city}`);
 
-    events.push({
+    const event = {
       title,
       slug: eventSlug,
 
@@ -319,80 +373,267 @@ function extractEventsFromPage(html, pageUrl) {
       lat: null,
       lng: null,
 
-      source_url: `${link}#${eventSlug}`,
-    });
+      source: "ticketrona",
+      source_id: extractSourceId(link),
+      source_url: link,
+      last_seen_at: new Date().toISOString(),
+    };
+
+    event.fingerprint = buildEventFingerprint(event);
+
+    events.push(event);
   }
 
   return events;
 }
 
-async function saveEvent(event) {
-  await axios.post(
-    `${SUPABASE_URL}/rest/v1/events?on_conflict=source_url`,
-    event,
+/**
+ * Busca el evento primero por su huella exacta:
+ *
+ * título normalizado + fecha + ciudad + recinto.
+ *
+ * Después busca por slug para cubrir eventos antiguos que todavía
+ * no tengan fingerprint.
+ */
+async function findDuplicateEvent(event) {
+  const fingerprintResponse = await axios.get(
+    `${SUPABASE_URL}/rest/v1/events`,
     {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates,return=minimal",
+      params: {
+        fingerprint: `eq.${event.fingerprint}`,
+        select:
+          "id,title,slug,event_date,city,place,price,source,source_id,fingerprint",
+        limit: 1,
       },
+      headers: getSupabaseHeaders(),
+    }
+  );
+
+  if (fingerprintResponse.data.length > 0) {
+    return {
+      event: fingerprintResponse.data[0],
+      matchedBy: "fingerprint",
+    };
+  }
+
+  const slugResponse = await axios.get(
+    `${SUPABASE_URL}/rest/v1/events`,
+    {
+      params: {
+        slug: `eq.${event.slug}`,
+        select:
+          "id,title,slug,event_date,city,place,price,source,source_id,fingerprint",
+        limit: 1,
+      },
+      headers: getSupabaseHeaders(),
+    }
+  );
+
+  if (slugResponse.data.length > 0) {
+    return {
+      event: slugResponse.data[0],
+      matchedBy: "slug",
+    };
+  }
+
+  return null;
+}
+
+function chooseLowestPrice(existingPrice, scrapedPrice) {
+  const validPrices = [existingPrice, scrapedPrice].filter(
+    (price) => typeof price === "number" && Number.isFinite(price)
+  );
+
+  if (!validPrices.length) return null;
+
+  return Math.min(...validPrices);
+}
+
+async function updateDuplicateEvent(existing, scrapedEvent) {
+  const lowestPrice = chooseLowestPrice(
+    existing.price,
+    scrapedEvent.price
+  );
+
+  const updatedEvent = {
+    ...scrapedEvent,
+
+    // Conservamos el slug que ya está publicado en vuestra web.
+    slug: existing.slug,
+
+    // En la beta mostramos el precio más barato conocido.
+    price: lowestPrice,
+    price_label:
+      lowestPrice !== null ? `Desde ${lowestPrice} €` : "Consultar",
+
+    // Actualizamos la fecha de última comprobación.
+    last_seen_at: new Date().toISOString(),
+  };
+
+  await axios.patch(
+    `${SUPABASE_URL}/rest/v1/events?id=eq.${existing.id}`,
+    updatedEvent,
+    {
+      headers: getSupabaseHeaders({
+        Prefer: "return=minimal",
+      }),
     }
   );
 }
 
-async function scrape() {
-  console.log("🚀 Scraper Ticketrona iniciado");
+async function upsertEventBySource(event) {
+  await axios.post(
+    `${SUPABASE_URL}/rest/v1/events?on_conflict=source,source_id`,
+    event,
+    {
+      headers: getSupabaseHeaders({
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      }),
+    }
+  );
+}
 
-  let saved = 0;
+async function saveEvent(event) {
+  const duplicate = await findDuplicateEvent(event);
+
+  if (duplicate) {
+    await updateDuplicateEvent(duplicate.event, event);
+
+    return {
+      status: "duplicate-updated",
+      matchedBy: duplicate.matchedBy,
+    };
+  }
+
+  await upsertEventBySource(event);
+
+  return {
+    status: "source-upserted",
+    matchedBy: "source",
+  };
+}
+function getTodaySpainYmd() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const year = parts.find((p) => p.type === "year").value;
+  const month = parts.find((p) => p.type === "month").value;
+  const day = parts.find((p) => p.type === "day").value;
+
+  return `${year}-${month}-${day}`;
+}
+
+export async function scrape({
+  startPage = 1,
+  endPage = MAX_PAGES,
+} = {}) {
+  const firstPage = Math.max(1, Number(startPage) || 1);
+  const lastPage = Math.min(
+    MAX_PAGES,
+    Math.max(firstPage, Number(endPage) || MAX_PAGES)
+  );
+console.log(
+  `🚀 Scraper Ticketrona iniciado — páginas ${firstPage} a ${lastPage}`
+);
+
+  let insertedOrUpdated = 0;
+  let duplicatesUpdated = 0;
   let skipped = 0;
-  const today = new Date().toISOString().slice(0, 10);
+  let errors = 0;
+  let reachedEnd = false;
 
-  for (let page = 1; page <= MAX_PAGES; page++) {
+  const today = getTodaySpainYmd();
+
+  for (let page = firstPage; page <= lastPage; page++) {
     const pageUrl = page === 1 ? START_URL : `${START_URL}/page/${page}`;
 
     console.log(`\n📄 Página ${page}: ${pageUrl}`);
 
-    const html = await getHtml(pageUrl);
+    let html;
+
+    try {
+      html = await getHtml(pageUrl);
+    } catch (error) {
+      errors++;
+
+      console.error(
+        `❌ Error leyendo la página ${page}:`,
+        error.response?.data || error.message
+      );
+
+      continue;
+    }
+
     const events = extractEventsFromPage(html, pageUrl);
 
-    if (!events.length) {
-      console.log("Sin eventos. Paramos.");
-      break;
-    }
+   if (!events.length) {
+  console.log("Sin eventos. Hemos llegado al final.");
+  reachedEnd = true;
+  break;
+}
 
     console.log(`Eventos encontrados: ${events.length}`);
 
     for (const event of events) {
-      if (event.event_date < today) {
-        skipped++;
-        continue;
-      }
+     if (!event.event_date || event.event_date < today) {
+  skipped++;
+  console.log("⏭ Evento pasado:", event.title, event.event_date);
+  continue;
 
+     }
       try {
-        const detailUrl = event.source_url.split("#")[0];
-        const detail = await getEventDetail(detailUrl);
+        const detail = await getEventDetail(event.source_url);
 
         if (detail.title) {
           event.title = cleanEventTitle(detail.title);
           event.image_alt = event.title;
           event.image_sub_label = event.title;
-          event.slug = slugify(`${event.title}-${event.event_date}-${event.city}`);
+
+          event.slug = slugify(
+            `${event.title}-${event.event_date}-${event.city}`
+          );
         }
 
         if (detail.description) {
-          event.description = cleanEventTitle(detail.description);
+          event.description = cleanText(detail.description);
         }
 
         if (detail.image) {
           event.image = detail.image;
         }
 
-        await saveEvent(event);
-        saved++;
-        console.log("✅ Guardado:", event.title, event.event_date, event.city);
+        event.last_seen_at = new Date().toISOString();
+        event.fingerprint = buildEventFingerprint(event);
+
+        const result = await saveEvent(event);
+
+        if (result.status === "duplicate-updated") {
+          duplicatesUpdated++;
+
+          console.log(
+            `♻️ Duplicado actualizado por ${result.matchedBy}:`,
+            event.title,
+            event.event_date,
+            event.city,
+            event.place
+          );
+        } else {
+          insertedOrUpdated++;
+
+          console.log(
+            "✅ Guardado/actualizado:",
+            event.title,
+            event.event_date,
+            event.city
+          );
+        }
       } catch (error) {
-        skipped++;
+        errors++;
+
         console.error(
           "❌ Error guardando:",
           event.title,
@@ -403,10 +644,19 @@ async function scrape() {
   }
 
   console.log("\n✔ Scraper Ticketrona terminado");
-  console.log("Guardados:", saved);
-  console.log("Ignorados:", skipped);
+  console.log("Guardados/actualizados por fuente:", insertedOrUpdated);
+  console.log("Duplicados detectados y actualizados:", duplicatesUpdated);
+  console.log("Eventos antiguos ignorados:", skipped);
+  console.log("Errores:", errors);
+
+ return {
+  startPage: firstPage,
+  endPage: lastPage,
+  insertedOrUpdated,
+  duplicatesUpdated,
+  skipped,
+  errors,
+  reachedEnd,
+};
 }
 
-scrape().catch((error) => {
-  console.error("Error general:", error.response?.data || error.message);
-});
