@@ -180,13 +180,16 @@ async function updateDuplicateEvent(existing, scrapedEvent) {
   );
 
   const updatedEvent = {
-    ...scrapedEvent,
-    slug: existing.slug,
-    price: lowestPrice,
-    price_label:
-      lowestPrice !== null ? `Desde ${lowestPrice} €` : "Consultar",
-    last_seen_at: new Date().toISOString(),
-  };
+  ...scrapedEvent,
+  slug: existing.slug,
+  source: existing.source,
+  source_id: existing.source_id,
+  source_url: existing.source_url,
+  price: lowestPrice,
+  price_label:
+    lowestPrice !== null ? `Desde ${lowestPrice} €` : "Consultar",
+  last_seen_at: new Date().toISOString(),
+};
 
   const response = await fetch(
     `${SUPABASE_URL}/rest/v1/events?id=eq.${existing.id}`,

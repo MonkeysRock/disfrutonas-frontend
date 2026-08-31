@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/fever",
       "schedule": "30 3 * * *"
-    }
+    },
+    {
+  "path": "/api/cron/festivals",
+  "schedule": "0 4 * * *"
+}
   ]
 }
