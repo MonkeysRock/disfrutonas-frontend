@@ -39,6 +39,7 @@ type AppEvent = {
   category: string;
   categorySlug: string;
   eventDate: string;
+  endDate?: string;
   date: string;
   time: string;
   place: string;
@@ -65,6 +66,7 @@ type SupabaseEvent = {
   category: string | null;
   category_slug: string | null;
   event_date: string | null;
+  end_date: string | null;
   time: string | null;
   date: string | null;
   place: string | null;
@@ -97,6 +99,7 @@ function mapSupabaseEvent(event: SupabaseEvent): AppEvent {
     category: event.category || "General",
     categorySlug: event.category_slug || "general",
     eventDate: event.event_date || "",
+    endDate: event.end_date || undefined,
     date: event.date || event.event_date || "",
     time: event.time || "",
     place: event.place || "",
@@ -229,12 +232,14 @@ function EventsPageContent() {
  const { data, error } = await supabase
   .from("events")
   .select("*")
-  .gte("event_date", today)
+  .or(
+    `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today})`
+  )
   .order("event_date", { ascending: true })
   .order("created_at", { ascending: false });
 
-      console.log("SUPABASE DATA:", data);
-      console.log("SUPABASE ERROR:", error);
+      
+   
 
       if (error) {
         setSupabaseError(error.message);
@@ -367,16 +372,48 @@ function EventsPageContent() {
         ? matchesLocationFromParam
         : matchesLocationFromInput;
 
-      const eventDateForFilter = event.eventDate || event.date || "";
+      const eventStartDate =
+  event.eventDate || event.date || "";
 
-      const matchesDates =
-        selectedDateMode === "none"
-          ? true
-          : selectedDateMode === "hoy"
-          ? matchesDateRange(eventDateForFilter, getTodayYmd(), getTodayYmd())
-          : selectedDateMode === "manana"
-          ? matchesDateRange(eventDateForFilter, getTomorrowYmd(), getTomorrowYmd())
-          : matchesDateRange(eventDateForFilter, dateFrom, dateTo || dateFrom);
+const eventEndDate =
+  event.endDate || eventStartDate;
+
+
+
+function overlapsDateRange(
+  filterStart: string,
+  filterEnd: string
+) {
+  if (!eventStartDate || !filterStart) {
+    return false;
+  }
+
+  const effectiveFilterEnd =
+    filterEnd || filterStart;
+
+  return (
+    eventStartDate <= effectiveFilterEnd &&
+    eventEndDate >= filterStart
+  );
+}
+
+const matchesDates =
+  selectedDateMode === "none"
+    ? true
+    : selectedDateMode === "hoy"
+    ? overlapsDateRange(
+        getTodayYmd(),
+        getTodayYmd()
+      )
+    : selectedDateMode === "manana"
+    ? overlapsDateRange(
+        getTomorrowYmd(),
+        getTomorrowYmd()
+      )
+    : overlapsDateRange(
+        dateFrom,
+        dateTo || dateFrom
+      );
 
       const matchesPillar = selectedPillar ? event.pillar === selectedPillar : true;
 
