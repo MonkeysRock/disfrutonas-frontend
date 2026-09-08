@@ -158,7 +158,7 @@ export async function generateMetadata({
     };
   }
 
-  const pageTitle = `${event.title} en ${event.city} | Disfrutonas`;
+  const pageTitle = `${event.title} en ${event.city}`;
   const pageDescription = `${event.title} · ${event.date} · ${event.place}. ${event.description}`;
   const canonicalPath = `/eventos/${event.citySlug}/${event.pillarSlug}/${event.categorySlug}/${event.slug}`;
   const absoluteUrl = `${SITE_URL}${canonicalPath}`;
