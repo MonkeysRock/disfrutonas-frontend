@@ -1,12 +1,25 @@
 import type { MetadataRoute } from "next";
-import { events } from "@/data/events";
+import { supabase } from "@/lib/supabase";
 
 const SITE_URL = "https://disfrutonas.com";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const { data: events, error } = await supabase
+    .from("events")
+    .select(
+      "slug, city_slug, pillar_slug, category_slug, event_date, updated_at"
+    )
+    .order("event_date", { ascending: true });
+
+  if (error) {
+    console.error("Error generating sitemap:", error);
+  }
+
+  const eventList = events ?? [];
+
   const staticPages: MetadataRoute.Sitemap = [
     {
-      url: `${SITE_URL}`,
+      url: SITE_URL,
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 1,
@@ -19,34 +32,47 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ];
 
-  const cityPages = Array.from(new Set(events.map((event) => event.citySlug))).map(
-    (citySlug) => ({
+  const cityPages: MetadataRoute.Sitemap = Array.from(
+    new Set(eventList.map((event) => event.city_slug))
+  )
+    .filter(Boolean)
+    .map((citySlug) => ({
       url: `${SITE_URL}/eventos/${citySlug}`,
       lastModified: new Date(),
-      changeFrequency: "daily" as const,
+      changeFrequency: "daily",
       priority: 0.9,
-    })
-  );
+    }));
 
-  const pillarPages = Array.from(
-    new Set(events.map((event) => `${event.citySlug}__${event.pillarSlug}`))
+  const pillarPages: MetadataRoute.Sitemap = Array.from(
+    new Set(
+      eventList
+        .filter((event) => event.city_slug && event.pillar_slug)
+        .map((event) => `${event.city_slug}__${event.pillar_slug}`)
+    )
   ).map((key) => {
     const [citySlug, pillarSlug] = key.split("__");
 
     return {
       url: `${SITE_URL}/eventos/${citySlug}/${pillarSlug}`,
       lastModified: new Date(),
-      changeFrequency: "daily" as const,
+      changeFrequency: "daily",
       priority: 0.85,
     };
   });
 
-  const categoryPages = Array.from(
+  const categoryPages: MetadataRoute.Sitemap = Array.from(
     new Set(
-      events.map(
-        (event) =>
-          `${event.citySlug}__${event.pillarSlug}__${event.categorySlug}`
-      )
+      eventList
+        .filter(
+          (event) =>
+            event.city_slug &&
+            event.pillar_slug &&
+            event.category_slug
+        )
+        .map(
+          (event) =>
+            `${event.city_slug}__${event.pillar_slug}__${event.category_slug}`
+        )
     )
   ).map((key) => {
     const [citySlug, pillarSlug, categorySlug] = key.split("__");
@@ -54,17 +80,27 @@ export default function sitemap(): MetadataRoute.Sitemap {
     return {
       url: `${SITE_URL}/eventos/${citySlug}/${pillarSlug}/${categorySlug}`,
       lastModified: new Date(),
-      changeFrequency: "daily" as const,
+      changeFrequency: "daily",
       priority: 0.8,
     };
   });
 
-  const eventPages = events.map((event) => ({
-    url: `${SITE_URL}/eventos/${event.citySlug}/${event.pillarSlug}/${event.categorySlug}/${event.slug}`,
-    lastModified: new Date(event.eventDate),
-    changeFrequency: "weekly" as const,
-    priority: 0.75,
-  }));
+  const eventPages: MetadataRoute.Sitemap = eventList
+    .filter(
+      (event) =>
+        event.slug &&
+        event.city_slug &&
+        event.pillar_slug &&
+        event.category_slug
+    )
+    .map((event) => ({
+      url: `${SITE_URL}/eventos/${event.city_slug}/${event.pillar_slug}/${event.category_slug}/${event.slug}`,
+      lastModified: event.updated_at
+        ? new Date(event.updated_at)
+        : new Date(event.event_date),
+      changeFrequency: "weekly",
+      priority: 0.75,
+    }));
 
   return [
     ...staticPages,
