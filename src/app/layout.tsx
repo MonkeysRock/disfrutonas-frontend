@@ -45,6 +45,11 @@ export const metadata: Metadata = {
     description:
       "Descubre conciertos, festivales, eventos y planes en España.",
   },
+
+  other: {
+    "impact-site-verification":
+      "999a667b-2b94-46a9-9cc5-77fcfbe89070",
+  },
 };
 
 export default function RootLayout({
