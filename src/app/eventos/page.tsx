@@ -424,13 +424,17 @@ const matchesDates =
 
       const matchesFree = onlyFree ? event.isFree : true;
 
-      const matchesPrice = onlyFree
-        ? true
-        : event.isFree
-        ? true
-        : typeof event.price === "number"
-        ? event.price >= priceMin && event.price <= priceMax
-        : true;
+      const isPriceFilterActive =
+  priceMin !== minEventPrice || priceMax !== maxEventPrice;
+
+const matchesPrice = onlyFree
+  ? true
+  : !isPriceFilterActive
+  ? true
+  : typeof event.price === "number" &&
+    !event.isFree &&
+    event.price >= priceMin &&
+    event.price <= priceMax;
 
       return (
         matchesLocation &&
