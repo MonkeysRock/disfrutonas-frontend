@@ -675,9 +675,7 @@ const matchesPrice = onlyFree
               : `${filteredEvents.length} evento${filteredEvents.length === 1 ? "" : "s"} encontrados`}
           </h1>
 
-          <p className="m-0 text-[17px] text-[#666] sm:text-[18px]">
-            Resultados cargados desde Supabase.
-          </p>
+         
 
           {supabaseError && (
             <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
@@ -689,11 +687,10 @@ const matchesPrice = onlyFree
         {!isLoadingEvents && filteredEvents.length === 0 ? (
           <section className="rounded-[28px] border border-[#eee] bg-white p-8 shadow-[0_10px_24px_rgba(0,0,0,0.04)]">
             <h2 className="mb-3 text-[28px] font-extrabold tracking-[-0.6px]">
-              No hay eventos cargados desde Supabase
+              No hemos encontrado eventos
             </h2>
             <p className="mb-5 max-w-[760px] text-[17px] leading-8 text-[#666]">
-              Ahora mismo la web no está usando los eventos de prueba. Si ves esto en producción,
-              significa que Supabase está devolviendo 0 filas o hay un problema de conexión.
+              Prueba a cambiar la ubicación, las fechas o los filtros para encontrar más eventos.
             </p>
 
             <button
