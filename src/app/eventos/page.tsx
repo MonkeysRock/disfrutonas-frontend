@@ -229,26 +229,45 @@ function EventsPageContent() {
       setSupabaseError(null);
       const today = getTodayLocalISO();
 
- const { data, error } = await supabase
-  .from("events")
-  .select("*")
-  .or(
-    `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today})`
-  )
-  .order("event_date", { ascending: true })
-  .order("created_at", { ascending: false });
-
+ 
       
-   
+ let allData: SupabaseEvent[] = [];
+let from = 0;
+const pageSize = 1000;
+let loadError: string | null = null;
 
-      if (error) {
-        setSupabaseError(error.message);
+while (true) {
+  const { data, error } = await supabase
+    .from("events")
+    .select("*")
+    .or(
+      `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today})`
+    )
+    .order("event_date", { ascending: true })
+    .order("created_at", { ascending: false })
+    .range(from, from + pageSize - 1);
+
+  if (error) {
+    loadError = error.message;
+    break;
+  }
+
+  const page = (data || []) as SupabaseEvent[];
+  allData = [...allData, ...page];
+
+  if (page.length < pageSize) break;
+
+  from += pageSize;
+}
+         
+      if (loadError) {
+  setSupabaseError(loadError);
         setEvents([]);
         setIsLoadingEvents(false);
         return;
       }
 
-      const mappedEvents = (data || []).map((event) =>
+     const mappedEvents = allData.map((event) =>
         mapSupabaseEvent(event as SupabaseEvent)
       );
 
