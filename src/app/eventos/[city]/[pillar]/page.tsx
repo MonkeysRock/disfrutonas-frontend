@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { pillarContent } from "@/data/taxonomy";
 import { supabase } from "@/lib/supabase";
+import EventsHeader from "@/components/layout/EventsHeader";
 
 async function getEventsByCityAndPillar(
   city: string,
@@ -98,8 +99,10 @@ export default async function PillarPage({
   const pillarInfo = pillarContent[pillar];
 
   if (!pillarInfo) {
+
     return (
       <main className="min-h-screen bg-[#fafafa] px-5 py-10">
+        
         <section className="mx-auto max-w-[900px] rounded-[24px] border border-[#eee] bg-white p-10 text-center">
           <h1 className="mt-0 text-3xl font-bold">Pilar no encontrado</h1>
           <p className="mt-3 text-[#666]">
@@ -118,8 +121,12 @@ export default async function PillarPage({
 
   const filtered = await getEventsByCityAndPillar(city, pillar);
 
-  return (
+return (
+  <>
+    <EventsHeader />
+
     <main className="min-h-screen bg-[#fafafa] px-4 py-6 md:px-5 md:py-10">
+
       <section className="mx-auto max-w-[1200px]">
         <div className="mb-4 text-sm text-[#666]">
           <a href="/eventos" className="text-[#666] no-underline">
@@ -133,55 +140,11 @@ export default async function PillarPage({
           <span>{pillarInfo.label}</span>
         </div>
 
-        <section className="mb-8 grid grid-cols-1 gap-6 rounded-[28px] border border-[#eee] bg-white p-6 shadow-[0_12px_30px_rgba(0,0,0,0.05)] md:grid-cols-[1.2fr_0.8fr] md:p-8">
-          <div>
-            <div
-              className={`mb-3 inline-block rounded-full px-4 py-2 text-sm font-bold ${
-                pillar === "deportivos"
-                  ? "bg-[#e9f2ff] text-[#1565c0]"
-                  : "bg-[#ffe8f1] text-[#d81b60]"
-              }`}
-            >
-              {pillarInfo.label}
-            </div>
-
-            <h1 className="mb-3 text-4xl leading-tight md:text-6xl">
-              {pillarInfo.label} en {city}
-            </h1>
-
-            <p className="mb-3 text-lg font-semibold text-[#444]">
-              {pillarInfo.subtitle}
-            </p>
-
-            <p className="m-0 max-w-[760px] text-base leading-7 text-[#666] md:text-lg">
-              {pillarInfo.description}
-            </p>
-          </div>
-
-          <aside
-            className={`rounded-[24px] p-6 shadow-[0_18px_40px_rgba(0,0,0,0.14)] ${
-              pillar === "deportivos"
-                ? "bg-[linear-gradient(135deg,#1565c0,#42a5f5)] text-white"
-                : "bg-[linear-gradient(135deg,#d81b60,#ff7a18)] text-white"
-            }`}
-          >
-            <div className="mb-3 text-sm font-bold uppercase tracking-[0.08em]">
-              Categorías
-            </div>
-            <p className="m-0 text-2xl font-bold leading-tight">
-              Navega por categorías específicas
-            </p>
-            <p className="mt-3 text-white/85">
-              Ciudad: {city} · Pilar: {pillarInfo.label}
-            </p>
-            <a
-              href={`/eventos/${city}`}
-              className="mt-5 inline-block rounded-[14px] bg-white px-5 py-3 font-bold text-[#111] no-underline"
-            >
-              Volver a la ciudad
-            </a>
-          </aside>
-        </section>
+       <section className="mb-7">
+  <h1 className="m-0 text-4xl font-bold leading-tight md:text-5xl">
+    {pillarInfo.label} en {city.charAt(0).toUpperCase() + city.slice(1)}
+  </h1>
+</section>
 
         <section className="mb-8">
           <div className="mb-4 flex flex-wrap gap-3">
@@ -301,7 +264,8 @@ export default async function PillarPage({
             ))}
           </section>
         )}
-      </section>
-    </main>
-  );
+          </section>
+  </main>
+  </>
+);
 }

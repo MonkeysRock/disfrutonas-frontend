@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { categoryLabels } from "@/data/taxonomy";
 import { supabase } from "@/lib/supabase";
+import EventsHeader from "@/components/layout/EventsHeader";
 
 async function getEventsByCityPillarAndCategory(
   city: string,
@@ -152,6 +153,9 @@ export default async function CategoryPage({
 );
 
   return (
+  <>
+    <EventsHeader />
+
     <main className="min-h-screen bg-[#fafafa] px-4 py-6 md:px-5 md:py-10">
       <section className="mx-auto max-w-[1200px]">
         <div className="mb-4 text-sm text-[#666]">
@@ -173,46 +177,11 @@ export default async function CategoryPage({
           <span>{categoryLabel}</span>
         </div>
 
-        <section className="mb-8 grid grid-cols-1 gap-6 rounded-[28px] border border-[#eee] bg-white p-6 shadow-[0_12px_30px_rgba(0,0,0,0.05)] md:grid-cols-[1.2fr_0.8fr] md:p-8">
-          <div>
-            <div
-              className={`mb-3 inline-block rounded-full px-4 py-2 text-sm font-bold ${
-                pillar === "deportivos"
-                  ? "bg-[#e9f2ff] text-[#1565c0]"
-                  : "bg-[#ffe8f1] text-[#d81b60]"
-              }`}
-            >
-              {pillarLabel}
-            </div>
-
-            <h1 className="mb-3 text-4xl leading-tight md:text-6xl">
-              {categoryLabel} en {city}
-            </h1>
-
-            <p className="m-0 max-w-[760px] text-base leading-7 text-[#666] md:text-lg">
-              Aquí verás todos los eventos de la categoría {categoryLabel.toLowerCase()} en{" "}
-              {city}, con acceso directo a sus fichas, precios y detalles.
-            </p>
-          </div>
-
-          <aside className="rounded-[24px] bg-[linear-gradient(135deg,#111,#333)] p-6 text-white shadow-[0_18px_40px_rgba(0,0,0,0.18)]">
-            <div className="mb-3 text-sm font-bold uppercase tracking-[0.08em]">
-              Categoría activa
-            </div>
-            <p className="m-0 text-2xl font-bold leading-tight">
-              {categoryLabel}
-            </p>
-            <p className="mt-3 text-white/80">
-              Ciudad: {city} · Pilar: {pillarLabel}
-            </p>
-            <a
-              href={`/eventos/${city}/${pillar}`}
-              className="mt-5 inline-block rounded-[14px] bg-white px-5 py-3 font-bold text-[#111] no-underline"
-            >
-              Volver al pilar
-            </a>
-          </aside>
-        </section>
+        <section className="mb-7">
+  <h1 className="m-0 text-4xl font-bold leading-tight md:text-5xl">
+    {categoryLabel} en {city.charAt(0).toUpperCase() + city.slice(1)}
+  </h1>
+</section>
 
         <section className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h2 className="m-0 text-3xl font-bold">
@@ -298,8 +267,9 @@ export default async function CategoryPage({
               </article>
             ))}
           </section>
-        )}
-      </section>
-    </main>
-  );
+              )}
+    </section>
+  </main>
+  </>
+);
 }
