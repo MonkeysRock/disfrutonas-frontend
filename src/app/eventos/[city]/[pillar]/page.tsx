@@ -10,7 +10,7 @@ async function getEventsByCityAndPillar(
   const { data, error } = await supabase
     .from("events")
     .select("*")
-    .eq("city_slug", city)
+    .eq("city_slug", city.toLowerCase())
     .eq("pillar_slug", pillar)
     .gte("event_date", new Date().toISOString().split("T")[0])
     .order("event_date", { ascending: true });
