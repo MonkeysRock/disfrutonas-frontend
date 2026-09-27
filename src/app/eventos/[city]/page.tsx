@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { citiesContent } from "@/data/taxonomy";
 import { supabase } from "@/lib/supabase";
 import EventsHeader from "@/components/layout/EventsHeader";
+import EventCard from "@/components/events/EventCard";
+
 
 async function getEventsByCity(city: string) {
   const today = new Date().toISOString().split("T")[0];
@@ -10,7 +12,9 @@ async function getEventsByCity(city: string) {
     .from("events")
     .select("*")
     .eq("city_slug", city.toLowerCase())
-    .gte("event_date", today)
+    .or(
+  `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today})`
+)
     .order("event_date", { ascending: true });
 
   if (error) {
@@ -41,6 +45,11 @@ async function getEventsByCity(city: string) {
         : event.price != null
         ? `Desde ${event.price}€`
         : "Consultar precio"),
+
+        image:
+  event.image ||
+  "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1200&auto=format&fit=crop",
+imageAlt: event.image_alt || event.title || "Evento",
   }));
 }
 
@@ -177,51 +186,10 @@ const cityName =
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
               {cityEvents.map((event) => (
-                <article
-                  key={event.id}
-                  className="rounded-[22px] border border-[#eee] bg-white p-5 shadow-[0_8px_20px_rgba(0,0,0,0.05)]"
-                >
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <span
-                      className={`rounded-full px-3 py-2 text-sm font-bold ${
-                        event.pillar === "Deportivos"
-                          ? "bg-[#eef6ff] text-[#1565c0]"
-                          : "bg-[#fff0f6] text-[#d81b60]"
-                      }`}
-                    >
-                      {event.pillar}
-                    </span>
-
-                    <span
-                      className={`rounded-full px-3 py-2 text-sm font-bold ${
-                        event.isFree
-                          ? "bg-[#eaf8ee] text-[#1b8f3a]"
-                          : "bg-[#f5f5f5] text-[#111]"
-                      }`}
-                    >
-                      {event.priceLabel}
-                    </span>
-                  </div>
-
-                  <h3 className="mb-3 text-[28px] leading-tight">{event.title}</h3>
-
-                  <p className="mb-2 text-[#666]">
-                    <strong>Categoría:</strong> {event.category}
-                  </p>
-                  <p className="mb-2 text-[#666]">
-                    <strong>Fecha:</strong> {event.date}
-                  </p>
-                  <p className="mb-4 text-[#666]">
-                    <strong>Lugar:</strong> {event.place}
-                  </p>
-
-                  <a
-                    href={`/eventos/${event.citySlug}/${event.pillarSlug}/${event.categorySlug}/${event.slug}`}
-                    className="block w-full rounded-[14px] bg-[#111] px-4 py-3 text-center font-bold text-white no-underline"
-                  >
-                    Ver evento
-                  </a>
-                </article>
+                <EventCard
+  key={event.id}
+  event={event}
+/>
               ))}
             </div>
           </section>
