@@ -9,7 +9,7 @@ async function getEventsByCity(city: string) {
   const { data, error } = await supabase
     .from("events")
     .select("*")
-    .eq("city_slug", city)
+    .eq("city_slug", city.toLowerCase())
     .gte("event_date", today)
     .order("event_date", { ascending: true });
 
