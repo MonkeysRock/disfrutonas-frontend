@@ -1,6 +1,51 @@
 import type { Metadata } from "next";
 import { categoryLabels } from "@/data/taxonomy";
-import { getEventsByCityPillarAndCategory } from "@/lib/helpers";
+import { supabase } from "@/lib/supabase";
+
+async function getEventsByCityPillarAndCategory(
+  city: string,
+  pillar: string,
+  category: string
+) {
+  const { data, error } = await supabase
+    .from("events")
+    .select("*")
+    .eq("city_slug", city)
+    .eq("pillar_slug", pillar)
+    .eq("category_slug", category)
+    .gte("event_date", new Date().toISOString().split("T")[0])
+    .order("event_date", { ascending: true });
+
+  if (error) {
+    console.error("Error cargando eventos desde Supabase:", error);
+    return [];
+  }
+
+  return (data || []).map((event) => ({
+    id: event.id,
+    title: event.title || "Evento sin título",
+    slug: event.slug || event.id,
+    city: event.city || "",
+    citySlug: event.city_slug || "",
+    pillar: event.pillar || "",
+    pillarSlug: event.pillar_slug || "",
+    category: event.category || "",
+    categorySlug: event.category_slug || "",
+    eventDate: event.event_date || "",
+    time: event.time || "",
+    date: event.date || event.event_date || "",
+    place: event.place || "Lugar por confirmar",
+    description: event.description || "",
+    isFree: Boolean(event.is_free),
+    price: typeof event.price === "number" ? event.price : 0,
+    priceLabel:
+      event.price_label ||
+      (event.is_free ? "Gratis" : `${event.price || 0}€`),
+    image: event.image || "",
+    imageAlt: event.image_alt || event.title || "Evento",
+    sourceUrl: event.source_url || "",
+  }));
+}
 
 export async function generateMetadata({
   params,
@@ -21,7 +66,11 @@ export async function generateMetadata({
       : null;
 
   const categoryLabel = categoryLabels[category];
-  const filtered = getEventsByCityPillarAndCategory(city, pillar, category);
+  const filtered = await getEventsByCityPillarAndCategory(
+  city,
+  pillar,
+  category
+);
 
   if (!pillarLabel || !categoryLabel) {
     return {
@@ -96,7 +145,11 @@ export default async function CategoryPage({
     );
   }
 
-  const filtered = getEventsByCityPillarAndCategory(city, pillar, category);
+  const filtered = await getEventsByCityPillarAndCategory(
+  city,
+  pillar,
+  category
+);
 
   return (
     <main className="min-h-screen bg-[#fafafa] px-4 py-6 md:px-5 md:py-10">
