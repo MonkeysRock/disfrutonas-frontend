@@ -481,22 +481,13 @@ export default function HomePage() {
       />
 
       <section className="mx-auto max-w-[1440px] px-4 pb-14 pt-8 sm:px-6 lg:px-8 lg:pt-12">
-        <section className="mb-14">
-          <div className="mx-auto max-w-[980px] text-center">
-            <div className="mb-4 inline-block rounded-full bg-[#ffe5ef] px-4 py-2 text-sm font-bold text-[#e91e63]">
-              Encuentra planes de todo tipo
-            </div>
-
-            <h1 className="mx-auto mb-4 max-w-[920px] text-[42px] font-extrabold leading-[0.96] tracking-[-1.4px] sm:text-[56px] lg:text-[72px]">
-              Descubre conciertos, teatro, deporte y mucho más
-            </h1>
-
-            <p className="mx-auto max-w-[760px] text-[18px] leading-8 text-[#666] sm:text-[19px]">
-              Busca qué hacer hoy, mañana o en tu próxima escapada. Disfrutonas
-              te enseña eventos de forma rápida, clara y directa.
-            </p>
-          </div>
-        </section>
+        <section className="mb-10 pt-2 sm:mb-12 sm:pt-4">
+  <div className="mx-auto max-w-[1100px] text-center">
+   <h1 className="m-0 text-[32px] font-extrabold leading-[1.08] tracking-[-0.8px] sm:text-[40px] lg:text-[48px]">
+  Conciertos, teatro, deporte y mucho más
+</h1>
+  </div>
+</section>
 
         <section className="mb-14">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
