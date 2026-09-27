@@ -1,6 +1,49 @@
 import type { Metadata } from "next";
 import { pillarContent } from "@/data/taxonomy";
-import { getEventsByCityAndPillar } from "@/lib/helpers";
+import { supabase } from "@/lib/supabase";
+
+async function getEventsByCityAndPillar(
+  city: string,
+  pillar: string
+) {
+  const { data, error } = await supabase
+    .from("events")
+    .select("*")
+    .eq("city_slug", city)
+    .eq("pillar_slug", pillar)
+    .gte("event_date", new Date().toISOString().split("T")[0])
+    .order("event_date", { ascending: true });
+
+  if (error) {
+    console.error("Error cargando eventos desde Supabase:", error);
+    return [];
+  }
+
+  return (data || []).map((event) => ({
+    id: event.id,
+    title: event.title || "Evento sin título",
+    slug: event.slug || event.id,
+    city: event.city || "",
+    citySlug: event.city_slug || "",
+    pillar: event.pillar || "",
+    pillarSlug: event.pillar_slug || "",
+    category: event.category || "",
+    categorySlug: event.category_slug || "",
+    eventDate: event.event_date || "",
+    time: event.time || "",
+    date: event.date || event.event_date || "",
+    place: event.place || "Lugar por confirmar",
+    description: event.description || "",
+    isFree: Boolean(event.is_free),
+    price: typeof event.price === "number" ? event.price : 0,
+    priceLabel:
+      event.price_label ||
+      (event.is_free ? "Gratis" : `Desde ${event.price || 0}€`),
+    image: event.image || "",
+    imageAlt: event.image_alt || event.title || "Evento",
+    sourceUrl: event.source_url || "",
+  }));
+}
 
 export async function generateMetadata({
   params,
@@ -9,7 +52,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { city, pillar } = await params;
   const pillarInfo = pillarContent[pillar];
-  const filtered = getEventsByCityAndPillar(city, pillar);
+  const filtered = await getEventsByCityAndPillar(city, pillar);
 
   if (!pillarInfo) {
     return {
@@ -73,7 +116,7 @@ export default async function PillarPage({
     );
   }
 
-  const filtered = getEventsByCityAndPillar(city, pillar);
+  const filtered = await getEventsByCityAndPillar(city, pillar);
 
   return (
     <main className="min-h-screen bg-[#fafafa] px-4 py-6 md:px-5 md:py-10">

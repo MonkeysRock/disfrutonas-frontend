@@ -1,9 +1,55 @@
 import type { Metadata } from "next";
 import { citiesContent } from "@/data/taxonomy";
-import {
-  getEventsByCity,
-  getPillarCountByCity,
-} from "@/lib/helpers";
+import { supabase } from "@/lib/supabase";
+import EventsHeader from "@/components/layout/EventsHeader";
+
+async function getEventsByCity(city: string) {
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data, error } = await supabase
+    .from("events")
+    .select("*")
+    .eq("city_slug", city)
+    .gte("event_date", today)
+    .order("event_date", { ascending: true });
+
+  if (error) {
+    console.error("Error cargando eventos desde Supabase:", error);
+    return [];
+  }
+
+  return (data || []).map((event) => ({
+    id: event.id,
+    title: event.title || "Evento sin título",
+    slug: event.slug || event.id,
+    city: event.city || "",
+    citySlug: event.city_slug || "",
+    pillar: event.pillar || "",
+    pillarSlug: event.pillar_slug || "",
+    category: event.category || "",
+    categorySlug: event.category_slug || "",
+    eventDate: event.event_date || "",
+    date: event.date || event.event_date || "",
+    time: event.time || "",
+    place: event.place || "",
+    isFree: Boolean(event.is_free),
+    price: event.price ?? undefined,
+    priceLabel:
+      event.price_label ||
+      (event.is_free
+        ? "Gratis"
+        : event.price != null
+        ? `Desde ${event.price}€`
+        : "Consultar precio"),
+  }));
+}
+
+function cityNameFromSlug(city: string) {
+  return city
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
 
 export async function generateMetadata({
   params,
@@ -11,21 +57,19 @@ export async function generateMetadata({
   params: Promise<{ city: string }>;
 }): Promise<Metadata> {
   const { city } = await params;
+
+  const cityEvents = await getEventsByCity(city);
   const cityInfo = citiesContent[city];
-  const cityEvents = getEventsByCity(city);
 
-  if (!cityInfo) {
-    return {
-      title: "Ciudad no encontrada | Disfrutonas",
-      description: "No hemos encontrado esta ciudad en Disfrutonas.",
-    };
-  }
+  const cityName =
+    cityInfo?.title.replace("Eventos en ", "") || cityNameFromSlug(city);
 
-  const pageTitle = `${cityInfo.title} | Disfrutonas`;
-  const pageDescription = `${cityInfo.description} Descubre ${cityEvents.length} eventos disponibles en ${cityInfo.title.replace(
-    "Eventos en ",
-    ""
-  )}.`;
+  const pageTitle = `Eventos en ${cityName} | Disfrutonas`;
+
+  const pageDescription = cityInfo?.description
+    ? `${cityInfo.description} Descubre ${cityEvents.length} eventos disponibles en ${cityName}.`
+    : `Descubre ${cityEvents.length} eventos en ${cityName}: conciertos, cultura, deporte, planes en familia y mucho más.`;
+
   const canonicalPath = `/eventos/${city}`;
 
   return {
@@ -57,29 +101,16 @@ export default async function CityPage({
 }) {
   const { city } = await params;
 
-  const cityEvents = getEventsByCity(city);
-  const cityInfo = citiesContent[city];
+  const cityEvents = await getEventsByCity(city);
+const cityInfo = citiesContent[city];
 
-  if (!cityInfo) {
-    return (
-      <main className="min-h-screen bg-[#fafafa] px-5 py-10">
-        <section className="mx-auto max-w-[900px] rounded-[24px] border border-[#eee] bg-white p-10 text-center">
-          <h1 className="mt-0 text-3xl font-bold">Ciudad no encontrada</h1>
-          <p className="mt-3 text-[#666]">
-            No hemos encontrado una página de eventos para esta ciudad.
-          </p>
-          <a
-            href="/eventos"
-            className="mt-5 inline-block rounded-xl bg-[#111] px-5 py-3 font-bold text-white no-underline"
-          >
-            Volver a eventos
-          </a>
-        </section>
-      </main>
-    );
-  }
+const cityName =
+  cityInfo?.title.replace("Eventos en ", "") || cityNameFromSlug(city);
 
   return (
+  <>
+    <EventsHeader />
+
     <main className="min-h-screen bg-[#fafafa] px-4 py-6 md:px-5 md:py-10">
       <section className="mx-auto max-w-[1200px]">
         <div className="mb-4 text-sm text-[#666]">
@@ -87,65 +118,16 @@ export default async function CityPage({
             Eventos
           </a>
           {" / "}
-          <span>{cityInfo.title}</span>
+          <span>Eventos en {cityName}</span>
         </div>
 
-        <section className="mb-8 grid grid-cols-1 gap-6 rounded-[28px] border border-[#eee] bg-white p-6 shadow-[0_12px_30px_rgba(0,0,0,0.05)] md:grid-cols-[1.2fr_0.8fr] md:p-8">
-          <div>
-            <div className="mb-3 inline-block rounded-full bg-[#ffe8f1] px-4 py-2 text-sm font-bold text-[#d81b60]">
-              Ciudad destacada
-            </div>
+        <section className="mb-7">
+  <h1 className="m-0 text-4xl font-bold leading-tight md:text-5xl">
+    Eventos en {cityName}
+  </h1>
+</section>
 
-            <h1 className="mb-3 text-4xl leading-tight md:text-6xl">
-              {cityInfo.title}
-            </h1>
-
-            <p className="mb-3 text-lg font-semibold text-[#444]">
-              {cityInfo.subtitle}
-            </p>
-
-            <p className="m-0 max-w-[760px] text-base leading-7 text-[#666] md:text-lg">
-              {cityInfo.description}
-            </p>
-          </div>
-
-          <aside className="rounded-[24px] bg-[linear-gradient(135deg,#ff4d8d,#ff7a18)] p-6 text-white shadow-[0_18px_40px_rgba(255,122,24,0.22)]">
-            <div className="mb-3 text-sm font-bold uppercase tracking-[0.08em]">
-              Plan local
-            </div>
-            <p className="m-0 text-2xl font-bold leading-tight">
-              {cityInfo.highlightedPlan}
-            </p>
-            <a
-              href="/eventos"
-              className="mt-5 inline-block rounded-[14px] bg-white px-5 py-3 font-bold text-[#d81b60] no-underline"
-            >
-              Ver todos los eventos
-            </a>
-          </aside>
-        </section>
-
-        <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div className="rounded-[22px] border border-[#eee] bg-white p-5">
-            <div className="mb-2 text-xs font-bold text-[#777]">TOTAL EVENTOS</div>
-            <div className="text-3xl font-extrabold">{cityEvents.length}</div>
-          </div>
-
-          <div className="rounded-[22px] border border-[#eee] bg-white p-5">
-            <div className="mb-2 text-xs font-bold text-[#777]">DEPORTIVOS</div>
-            <div className="text-3xl font-extrabold">
-              {getPillarCountByCity(city, "deportivos")}
-            </div>
-          </div>
-
-          <div className="rounded-[22px] border border-[#eee] bg-white p-5">
-            <div className="mb-2 text-xs font-bold text-[#777]">CULTURALES</div>
-            <div className="text-3xl font-extrabold">
-              {getPillarCountByCity(city, "culturales")}
-            </div>
-          </div>
-        </section>
-
+       
         <section className="mb-8">
           <div className="mb-4 flex flex-wrap gap-3">
             <a
@@ -166,6 +148,12 @@ export default async function CityPage({
             >
               Culturales
             </a>
+            <a
+  href={`/eventos/${city}/familia`}
+  className="rounded-full bg-[#fff7e6] px-4 py-3 font-bold text-[#d97706] no-underline"
+>
+  Familia
+</a>
           </div>
         </section>
 
@@ -180,7 +168,7 @@ export default async function CityPage({
           <section>
             <div className="mb-5 flex items-center justify-between gap-3 flex-wrap">
               <h2 className="m-0 text-3xl font-bold">
-                Eventos en {cityInfo.title.replace("Eventos en ", "")}
+                Eventos en {cityName}
               </h2>
               <span className="text-[#666]">
                 {cityEvents.length} resultado{cityEvents.length !== 1 ? "s" : ""}
@@ -238,7 +226,8 @@ export default async function CityPage({
             </div>
           </section>
         )}
-      </section>
+            </section>
     </main>
-  );
+  </>
+);
 }
