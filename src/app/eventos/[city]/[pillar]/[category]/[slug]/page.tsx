@@ -158,7 +158,9 @@ export async function generateMetadata({
     };
   }
 
-  const pageTitle = `${event.title} en ${event.city}`;
+  const eventYear = event.date ? event.date.slice(0, 4) : "";
+  const titleHasYear = /\b(19|20)\d{2}\b/.test(event.title);
+  const pageTitle = `${event.title}${!titleHasYear && eventYear ? ` ${eventYear}` : ""} en ${event.city}`;
   const pageDescription = `${event.title} · ${event.date} · ${event.place}. ${event.description}`;
   const canonicalPath = `/eventos/${event.citySlug}/${event.pillarSlug}/${event.categorySlug}/${event.slug}`;
   const absoluteUrl = `${SITE_URL}${canonicalPath}`;
@@ -356,6 +358,9 @@ export default async function EventDetailPage({
 
                 <h1 className="m-0 max-w-[900px] text-3xl font-extrabold leading-tight text-white sm:text-5xl lg:text-6xl">
                   {event.title}
+{!/\b(19|20)\d{2}\b/.test(event.title) && event.date
+  ? ` ${event.date.slice(0, 4)}`
+  : ""}
                 </h1>
 
                 <p className="mb-0 mt-3 text-base font-medium text-white/90 sm:text-lg">
