@@ -37,6 +37,7 @@ async function getEventsByCityAndPillar(
     eventDate: event.event_date || "",
     time: event.time || "",
     date: event.date || event.event_date || "",
+    endDate: event.end_date || "",
     place: event.place || "Lugar por confirmar",
     description: event.description || "",
     isFree: Boolean(event.is_free),

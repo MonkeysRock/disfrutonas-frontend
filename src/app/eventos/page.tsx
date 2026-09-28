@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
+import EventCard from "@/components/events/EventCard";
 import type { AppDateMode } from "@/components/search/SearchHeader";
 import FiltersModal from "@/components/search/FiltersModal";
 import { normalizeText, searchLocations } from "@/lib/helpers";
@@ -99,8 +100,8 @@ function mapSupabaseEvent(event: SupabaseEvent): AppEvent {
     category: event.category || "General",
     categorySlug: event.category_slug || "general",
     eventDate: event.event_date || "",
-    endDate: event.end_date || undefined,
     date: event.date || event.event_date || "",
+    endDate: event.end_date || "",
     time: event.time || "",
     place: event.place || "",
     description: event.description || "",
@@ -723,7 +724,10 @@ const matchesPrice = onlyFree
         ) : (
           <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
             {filteredEvents.map((event) => (
-              <EventResultCard key={`${event.citySlug}-${event.slug}`} event={event} />
+            <EventCard
+      key={`${event.citySlug}-${event.slug}`}
+      event={event}
+    />
             ))}
           </section>
         )}

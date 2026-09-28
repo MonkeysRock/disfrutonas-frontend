@@ -23,6 +23,7 @@ type SupabaseEvent = {
   category: string | null;
   category_slug: string | null;
   event_date: string | null;
+  end_date: string | null;
   time: string | null;
   date: string | null;
   place: string | null;
@@ -52,6 +53,7 @@ type EventDetail = {
   category: string;
   categorySlug: string;
   eventDate: string;
+  endDate: string;
   time: string;
   date: string;
   place: string;
@@ -84,6 +86,7 @@ function mapSupabaseEvent(event: SupabaseEvent): EventDetail {
     category: event.category || "General",
     categorySlug: event.category_slug || "general",
     eventDate: event.event_date || "",
+    endDate: event.end_date || "",
     time: event.time || "00:00",
     date: event.date || event.event_date || "Fecha por confirmar",
     place: event.place || "Lugar por confirmar",
@@ -194,6 +197,30 @@ export async function generateMetadata({
       images: [event.image],
     },
   };
+}
+
+function formatEventDate(date?: string) {
+  if (!date) return "Fecha por confirmar";
+
+  const parsed = new Date(`${date}T12:00:00`);
+
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
+    .format(parsed)
+    .replace(".", "");
+}
+
+function formatEventDateRange(date?: string, endDate?: string) {
+  const start = formatEventDate(date);
+
+  if (!endDate || endDate === date) {
+    return start;
+  }
+
+  return `${start} – ${formatEventDate(endDate)}`;
 }
 
 function buildEventNarrative(event: EventDetail) {
@@ -409,7 +436,9 @@ export default async function EventDetailPage({
               <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
                 <div className="rounded-[18px] border border-[#eee] bg-[#fafafa] p-4">
                   <div className="mb-2 text-xs font-bold text-[#777]">FECHA</div>
-                  <div className="font-bold">{event.date}</div>
+                  <div className="font-bold">
+  {formatEventDateRange(event.date, event.endDate)}
+</div>
                 </div>
 
                 <div className="rounded-[18px] border border-[#eee] bg-[#fafafa] p-4">

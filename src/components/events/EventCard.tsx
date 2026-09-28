@@ -10,12 +10,37 @@ export type EventCardData = {
   category: string;
   categorySlug: string;
   date: string;
+  endDate?: string;
   place: string;
   isFree: boolean;
   priceLabel: string;
   image: string;
   imageAlt: string;
 };
+
+function formatEventDate(date?: string) {
+  if (!date) return "Próximamente";
+
+  const parsed = new Date(`${date}T12:00:00`);
+
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
+    .format(parsed)
+    .replace(".", "");
+}
+
+function formatEventDateRange(date?: string, endDate?: string) {
+  const start = formatEventDate(date);
+
+  if (!endDate || endDate === date) {
+    return start;
+  }
+
+  return `${start} – ${formatEventDate(endDate)}`;
+}
 
 export default function EventCard({
   event,
@@ -75,7 +100,7 @@ export default function EventCard({
 
         <p className="mb-1 text-[15px] text-[#666]">
           <strong className="text-[#222]">Fecha:</strong>{" "}
-          {event.date || "Próximamente"}
+          {formatEventDateRange(event.date, event.endDate)}
         </p>
 
         <p className="mb-4 text-[15px] text-[#666]">
