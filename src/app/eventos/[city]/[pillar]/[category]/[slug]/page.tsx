@@ -132,11 +132,17 @@ async function getEventByFullPath(params: PageParams) {
 }
 
 async function getRelatedEvents(event: EventDetail) {
+  const today = new Date().toISOString().split("T")[0];
+
   const { data, error } = await supabase
     .from("events")
     .select("*")
     .neq("id", event.id)
     .or(`city_slug.eq.${event.citySlug},category_slug.eq.${event.categorySlug}`)
+    .or(
+      `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today})`
+    )
+    .order("event_date", { ascending: true })
     .limit(3);
 
   if (error || !data) {
@@ -558,8 +564,9 @@ export default async function EventDetailPage({
                       <strong>Ciudad:</strong> {item.city}
                     </p>
                     <p className="mb-1.5 text-[#666]">
-                      <strong>Fecha:</strong> {item.date}
-                    </p>
+  <strong>Fecha:</strong>{" "}
+  {formatEventDateRange(item.date, item.endDate)}
+</p>
                     <p className="m-0 text-[#666]">
                       <strong>Lugar:</strong> {item.place}
                     </p>
