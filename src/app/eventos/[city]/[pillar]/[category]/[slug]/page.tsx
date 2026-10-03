@@ -447,10 +447,16 @@ export default async function EventDetailPage({
 </div>
                 </div>
 
-                <div className="rounded-[18px] border border-[#eee] bg-[#fafafa] p-4">
-                  <div className="mb-2 text-xs font-bold text-[#777]">CIUDAD</div>
-                  <div className="font-bold">{event.city}</div>
-                </div>
+               <div className="rounded-[18px] border border-[#eee] bg-[#fafafa] p-4">
+  <div className="mb-2 text-xs font-bold text-[#777]">CIUDAD</div>
+
+  <Link
+    href={`/eventos/${event.citySlug}`}
+    className="font-bold text-[#111] no-underline hover:underline"
+  >
+    {event.city}
+  </Link>
+</div>
 
                 <div className="rounded-[18px] border border-[#eee] bg-[#fafafa] p-4">
                   <div className="mb-2 text-xs font-bold text-[#777]">LUGAR</div>
