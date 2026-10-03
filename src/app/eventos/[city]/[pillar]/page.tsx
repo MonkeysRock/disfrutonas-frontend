@@ -145,10 +145,19 @@ return (
           <span>{pillarInfo.label}</span>
         </div>
 
-       <section className="mb-7">
-  <h1 className="m-0 text-4xl font-bold leading-tight md:text-5xl">
-    {pillarInfo.label} en {city.charAt(0).toUpperCase() + city.slice(1)}
-  </h1>
+     <section className="mb-7">
+  <div className="flex items-baseline gap-3">
+    <span
+      aria-hidden="true"
+      className="text-4xl font-bold leading-tight md:text-5xl"
+    >
+      {filtered.length}
+    </span>
+
+    <h1 className="m-0 text-4xl font-bold leading-tight md:text-5xl">
+      {pillarInfo.label} en {city.charAt(0).toUpperCase() + city.slice(1)}
+    </h1>
+  </div>
 </section>
 
         <section className="mb-8">
@@ -200,14 +209,7 @@ return (
           </div>
         </section>
 
-        <section className="mb-6 flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="m-0 text-3xl font-bold">
-            {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
-          </h2>
-          <span className="text-[#666]">
-            {pillarInfo.label} en {city}
-          </span>
-        </section>
+       
 
         {filtered.length === 0 ? (
           <section className="rounded-[24px] border border-[#eee] bg-white p-10 text-center">
