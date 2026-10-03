@@ -188,16 +188,23 @@ export default async function CategoryPage({
           <span>{categoryLabel}</span>
         </div>
 
-        <section className="mb-7">
-  <h1 className="m-0 text-4xl font-bold leading-tight md:text-5xl">
-    {categoryLabel} en {city.charAt(0).toUpperCase() + city.slice(1)}
-  </h1>
+    <section className="mb-7">
+  <div className="flex items-baseline gap-3">
+    <span
+      aria-hidden="true"
+      className="text-4xl font-bold leading-tight md:text-5xl"
+    >
+      {filtered.length}
+    </span>
+
+    <h1 className="m-0 text-4xl font-bold leading-tight md:text-5xl">
+      {categoryLabel} en {city.charAt(0).toUpperCase() + city.slice(1)}
+    </h1>
+  </div>
 </section>
 
         <section className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="m-0 text-3xl font-bold">
-            {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
-          </h2>
+         
 
           <div className="flex flex-wrap gap-3">
             <a
