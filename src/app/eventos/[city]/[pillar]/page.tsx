@@ -160,55 +160,52 @@ return (
   </div>
 </section>
 
-        <section className="mb-8">
-          <div className="mb-4 flex flex-wrap gap-3">
-            <a
-              href={`/eventos/${city}`}
-              className="rounded-full border border-[#ddd] bg-white px-4 py-3 font-bold text-[#111] no-underline"
-            >
-              Todos
-            </a>
+       <section className="mb-8">
+  <div className="flex gap-3 overflow-x-auto whitespace-nowrap pb-2">
+    <a
+      href={`/eventos/${city}`}
+      className="shrink-0 rounded-full border border-[#ddd] bg-white px-4 py-3 font-bold text-[#111] no-underline"
+    >
+      Todos
+    </a>
 
-            <a
-              href={`/eventos/${city}/deportivos`}
-              className={`rounded-full px-4 py-3 font-bold no-underline ${
-                pillar === "deportivos"
-                  ? "bg-[#e9f2ff] text-[#1565c0]"
-                  : "border border-[#ddd] bg-white text-[#111]"
-              }`}
-            >
-              Deportivos
-            </a>
+    <a
+      href={`/eventos/${city}/deportivos`}
+      className={`shrink-0 rounded-full px-4 py-3 font-bold no-underline ${
+        pillar === "deportivos"
+          ? "bg-[#e9f2ff] text-[#1565c0]"
+          : "border border-[#ddd] bg-white text-[#111]"
+      }`}
+    >
+      Deportivos
+    </a>
 
-            <a
-              href={`/eventos/${city}/culturales`}
-              className={`rounded-full px-4 py-3 font-bold no-underline ${
-                pillar === "culturales"
-                  ? "bg-[#ffe8f1] text-[#d81b60]"
-                  : "border border-[#ddd] bg-white text-[#111]"
-              }`}
-            >
-              Culturales
-            </a>
-          </div>
+    <a
+      href={`/eventos/${city}/culturales`}
+      className={`shrink-0 rounded-full px-4 py-3 font-bold no-underline ${
+        pillar === "culturales"
+          ? "bg-[#ffe8f1] text-[#d81b60]"
+          : "border border-[#ddd] bg-white text-[#111]"
+      }`}
+    >
+      Culturales
+    </a>
 
-          <div className="flex flex-wrap gap-3">
-            {pillarInfo.categories.map((category) => (
-              <a
-                key={category.slug}
-                href={`/eventos/${city}/${pillar}/${category.slug}`}
-                className={`rounded-full px-4 py-3 font-bold no-underline ${
-                  pillar === "deportivos"
-                    ? "bg-[#eef6ff] text-[#1565c0]"
-                    : "bg-[#fff0f6] text-[#d81b60]"
-                }`}
-              >
-                {category.label}
-              </a>
-            ))}
-          </div>
-        </section>
-
+    {pillarInfo.categories.map((category) => (
+      <a
+        key={category.slug}
+        href={`/eventos/${city}/${pillar}/${category.slug}`}
+        className={`shrink-0 rounded-full px-4 py-3 font-bold no-underline ${
+          pillar === "deportivos"
+            ? "bg-[#eef6ff] text-[#1565c0]"
+            : "bg-[#fff0f6] text-[#d81b60]"
+        }`}
+      >
+        {category.label}
+      </a>
+    ))}
+  </div>
+</section>
        
 
         {filtered.length === 0 ? (
