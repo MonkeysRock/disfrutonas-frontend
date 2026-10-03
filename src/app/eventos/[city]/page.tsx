@@ -131,10 +131,19 @@ const cityName =
           <span>Eventos en {cityName}</span>
         </div>
 
-        <section className="mb-7">
-  <h1 className="m-0 text-4xl font-bold leading-tight md:text-5xl">
-    Eventos en {cityName}
-  </h1>
+       <section className="mb-7">
+  <div className="flex items-baseline gap-3">
+    <span
+      aria-hidden="true"
+      className="text-4xl font-bold leading-tight md:text-5xl"
+    >
+      {cityEvents.length}
+    </span>
+
+    <h1 className="m-0 text-4xl font-bold leading-tight md:text-5xl">
+      Eventos en {cityName}
+    </h1>
+  </div>
 </section>
 
        
@@ -176,14 +185,7 @@ const cityName =
           </section>
         ) : (
           <section>
-            <div className="mb-5 flex items-center justify-between gap-3 flex-wrap">
-              <h2 className="m-0 text-3xl font-bold">
-                Eventos en {cityName}
-              </h2>
-              <span className="text-[#666]">
-                {cityEvents.length} resultado{cityEvents.length !== 1 ? "s" : ""}
-              </span>
-            </div>
+            
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
               {cityEvents.map((event) => (
