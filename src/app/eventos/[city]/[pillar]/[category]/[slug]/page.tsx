@@ -355,6 +355,47 @@ export default async function EventDetailPage({
       <EventDetailHeader initialLocationName={event.city} />
 
       <section className="mx-auto max-w-[1180px] px-4 py-6 md:px-5 md:py-10">
+
+<nav
+  aria-label="Migas de pan"
+  className="mb-4 overflow-x-auto whitespace-nowrap text-sm text-[#666]"
+>
+  <Link href="/eventos" className="text-[#666] no-underline hover:underline">
+    Eventos
+  </Link>
+
+  <span className="mx-1"> / </span>
+
+  <Link
+    href={`/eventos/${event.citySlug}`}
+    className="text-[#666] no-underline hover:underline"
+  >
+    {event.city}
+  </Link>
+
+  <span className="mx-1"> / </span>
+
+  <Link
+    href={`/eventos/${event.citySlug}/${event.pillarSlug}`}
+    className="text-[#666] no-underline hover:underline"
+  >
+    {event.pillar}
+  </Link>
+
+  <span className="mx-1"> / </span>
+
+  <Link
+    href={`/eventos/${event.citySlug}/${event.pillarSlug}/${event.categorySlug}`}
+    className="text-[#666] no-underline hover:underline"
+  >
+    {event.category}
+  </Link>
+
+  <span className="mx-1"> / </span>
+
+  <span className="text-[#888]">{event.title}</span>
+</nav>
+
         <section className="mb-7 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
           <article className="order-1 overflow-hidden rounded-[28px] border border-[#eee] bg-white shadow-[0_12px_30px_rgba(0,0,0,0.06)] lg:order-0">
             <div className="relative">
