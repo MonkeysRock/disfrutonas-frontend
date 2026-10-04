@@ -10,11 +10,16 @@
       "schedule": "30 3 * * *"
     },
     {
-  "path": "/api/cron/festivals",
-  "schedule": "0 4 * * *"
-},
-
-{ "path": "/api/cron/carreras-populares", "schedule": "30 4 * * 1" }
-
+      "path": "/api/cron/festivals",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/carreras-populares",
+      "schedule": "30 4 * * 1"
+    },
+    {
+      "path": "/api/cron/gigsberg",
+      "schedule": "0 5 * * *"
+    }
   ]
 }

@@ -721,7 +721,7 @@ function findPossibleDuplicate(
 // MAIN
 // ============================================================
 
-async function main() {
+export async function scrapeGigsberg() {
   const rows =
     await readFeed();
 
@@ -1942,14 +1942,20 @@ if (DRY_RUN) {
 }
 
 // ============================================================
-// EJECUTAR
+// EJECUTAR DIRECTAMENTE DESDE TERMINAL
 // ============================================================
 
-main().catch((error) => {
-  console.error(
-    "❌ Error procesando Gigsberg:",
-    error
-  );
+if (
+  process.argv[1] &&
+  import.meta.url ===
+    new URL(`file://${process.argv[1]}`).href
+) {
+  scrapeGigsberg().catch((error) => {
+    console.error(
+      "❌ Error procesando Gigsberg:",
+      error
+    );
 
-  process.exit(1);
-});
+    process.exit(1);
+  });
+}
