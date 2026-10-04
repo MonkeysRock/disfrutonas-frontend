@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config({ path: "../.env.local" });
 
-import fs from "fs";
+
 import { parse } from "csv-parse";
 import { createGunzip } from "zlib";
 import axios from "axios";
@@ -11,16 +11,24 @@ import axios from "axios";
 // CONFIGURACIÓN
 // ============================================================
 
-const FEED_FILE = new URL(
-  "./102705-117210-en_ES-Fastify_EUR_ES_Feed.csv.gz",
-  import.meta.url
-);
+const GIGSBERG_FEED_URL =
+  process.env.GIGSBERG_FEED_URL;
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const SUPABASE_URL =
+  process.env.SUPABASE_URL;
+
+const SUPABASE_KEY =
+  process.env.SUPABASE_KEY;
+
 
 const DRY_RUN = false;
 const TEST_WRITE_LIMIT = Infinity;
+
+if (!GIGSBERG_FEED_URL) {
+  throw new Error(
+    "Falta GIGSBERG_FEED_URL en .env.local"
+  );
+}
 
 if (!SUPABASE_URL) {
   throw new Error("Falta SUPABASE_URL en .env.local");
@@ -212,12 +220,23 @@ function isValidDate(date) {
 // ============================================================
 
 async function readFeed() {
-  console.log("🚀 Leyendo feed Gigsberg...");
+  console.log(
+    "🌐 Descargando feed Gigsberg actualizado desde AWIN..."
+  );
 
-  return new Promise((resolve, reject) => {
+  const response = await axios.get(
+    GIGSBERG_FEED_URL,
+    {
+      responseType: "stream",
+      decompress: true,
+      timeout: 120000,
+    }
+  );
+
+   return new Promise((resolve, reject) => {
     const rows = [];
 
-    fs.createReadStream(FEED_FILE)
+    response.data
       .pipe(createGunzip())
       .pipe(
         parse({
@@ -232,11 +251,16 @@ async function readFeed() {
         rows.push(row);
       })
       .on("end", () => {
+        console.log(
+          `✅ Feed Gigsberg AWIN descargado: ${rows.length} filas`
+        );
+
         resolve(rows);
       })
       .on("error", reject);
   });
 }
+
 
 
 // ============================================================
@@ -577,6 +601,51 @@ async function insertOffer(offer) {
   }
 
   return createdOffer;
+}
+
+async function updateOffer(offer) {
+  if (DRY_RUN) {
+    throw new Error(
+      "updateOffer() bloqueado porque DRY_RUN = true"
+    );
+  }
+
+  const response = await axios.patch(
+    `${SUPABASE_URL}/rest/v1/event_offers`,
+    {
+      event_id: offer.event_id,
+      merchant: offer.merchant,
+      price: offer.price,
+      currency: offer.currency,
+      affiliate_url: offer.affiliate_url,
+      last_seen_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      params: {
+        source: `eq.${offer.source}`,
+        source_id: `eq.${offer.source_id}`,
+      },
+
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+    }
+  );
+
+  const updatedOffer =
+    response.data?.[0];
+
+  if (!updatedOffer?.id) {
+    throw new Error(
+      `Supabase no actualizó oferta: ${offer.source} | ${offer.source_id}`
+    );
+  }
+
+  return updatedOffer;
 }
 
 async function getExistingOffers() {
@@ -1261,6 +1330,16 @@ const existingOfferKeys =
     )
   );
 
+  const existingOffersMap =
+  new Map(
+    existingOffers.map(
+      (offer) => [
+        `${offer.source}|${offer.source_id}`,
+        offer,
+      ]
+    )
+  );
+
 
 const allProposedGigsbergOffers = [
   ...gigsbergOffersForExistingEvents,
@@ -1295,8 +1374,10 @@ if (!DRY_RUN) {
     "\n🚀 INICIANDO ESCRITURA EN SUPABASE..."
   );
 
-  let insertedEvents = 0;
-  let insertedOffers = 0;
+ let insertedEvents = 0;
+let insertedOffers = 0;
+let updatedOffers = 0;
+let unchangedOffers = 0;
 
 
   // ========================================================
@@ -1305,18 +1386,63 @@ if (!DRY_RUN) {
 
   for (
   const offer
-  of gigsbergOffersForExistingEvents
+    of gigsbergOffersForExistingEvents
 ) {
     const offerKey =
       `${offer.source}|${offer.source_id}`;
 
-    if (
-      existingOfferKeys.has(
-        offerKey
-      )
-    ) {
-      continue;
-    }
+   if (
+  existingOfferKeys.has(
+    offerKey
+  )
+) {
+  const existingOffer =
+    existingOffersMap.get(
+      offerKey
+    );
+
+  const hasChanged =
+    Number(existingOffer.price) !==
+      Number(offer.price) ||
+    existingOffer.currency !==
+      offer.currency ||
+    existingOffer.affiliate_url !==
+      offer.affiliate_url ||
+    existingOffer.event_id !==
+      offer.event_id;
+
+  if (!hasChanged) {
+  unchangedOffers++;
+  continue;
+}
+
+  await updateOffer({
+    event_id:
+      offer.event_id,
+
+    merchant:
+      offer.merchant,
+
+    source:
+      offer.source,
+
+    source_id:
+      offer.source_id,
+
+    price:
+      offer.price,
+
+    currency:
+      offer.currency,
+
+    affiliate_url:
+      offer.affiliate_url,
+  });
+
+  updatedOffers++;
+
+  continue;
+}
 
     await insertOffer({
       event_id:
@@ -1450,6 +1576,14 @@ for (
   console.log(
     `🎫 Ofertas insertadas: ${insertedOffers}`
   );
+console.log(
+  `🔄 Ofertas actualizadas: ${updatedOffers}`
+);
+
+console.log(
+  `⏭️ Ofertas sin cambios: ${unchangedOffers}`
+);
+
 }
 
 
