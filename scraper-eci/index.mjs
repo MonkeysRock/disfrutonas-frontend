@@ -4,6 +4,10 @@ import fs from "fs";
 import axios from "axios";
 import { parse } from "csv-parse";
 import { createGunzip } from "zlib";
+import {
+  loadGeoCities,
+  findGeoCity,
+} from "../scraper-shared/geo.mjs";
 
 const AWIN_FEED_URL = process.env.AWIN_FEED_URL;
 
@@ -12,6 +16,13 @@ if (!AWIN_FEED_URL) {
 }
 
 const DRY_RUN = process.env.ECI_DRY_RUN !== "false";
+const ECI_IMPORT_EVENTS = process.env.ECI_IMPORT_EVENTS === "true";
+const ECI_UPDATE_OFFERS = process.env.ECI_UPDATE_OFFERS === "true";
+const ECI_INSERT_OFFERS = process.env.ECI_INSERT_OFFERS === "true";
+
+
+const ECI_TEST_MODE = process.env.ECI_TEST_MODE !== "false";
+const ECI_TEST_LIMIT = 5;
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -218,6 +229,20 @@ function transformRow(row) {
     cleanText(row.merchant_product_id) ||
     cleanText(row.aw_product_id);
 
+    const normalizedTitle = title.toLowerCase();
+
+let ticketType = null;
+
+if (/\bpremium\b/i.test(normalizedTitle)) {
+  ticketType = "Premium";
+} else if (/\b(reducida|reducido)\b/i.test(normalizedTitle)) {
+  ticketType = "Reducida";
+} else if (/\b(flexible|flexible entry)\b/i.test(normalizedTitle)) {
+  ticketType = "Flexible";
+} else if (/\b(general)\b/i.test(normalizedTitle)) {
+  ticketType = "General";
+}
+
   const event = {
     title,
 
@@ -265,6 +290,7 @@ time: null,
     source: "eci",
 
     source_id: sourceId,
+    ticket_type: ticketType,
 
     // IMPORTANTE:
     // guardamos el enlace de afiliado de Awin.
@@ -324,7 +350,7 @@ async function getExistingFingerprints() {
       `${SUPABASE_URL}/rest/v1/events`,
       {
         params: {
-          select: "id,title,event_date,city,place,source,source_url,fingerprint",
+          select: "id,title,event_date,city,city_id,place,source,source_url,fingerprint",
           limit,
           offset,
         },
@@ -349,6 +375,141 @@ async function getExistingFingerprints() {
   );
 
   return existingEvents;
+}
+
+async function getExistingOffers() {
+  console.log(
+    "\n🎫 Consultando ofertas existentes en Supabase..."
+  );
+
+  const existingOffers = [];
+  let offset = 0;
+  const limit = 1000;
+
+  while (true) {
+    const response = await axios.get(
+      `${SUPABASE_URL}/rest/v1/event_offers`,
+      {
+        params: {
+          select:
+            "id,event_id,merchant,source,source_id,price,currency,ticket_type,affiliate_url,last_seen_at",
+          limit,
+          offset,
+        },
+
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+      }
+    );
+
+    existingOffers.push(...response.data);
+
+    if (response.data.length < limit) {
+      break;
+    }
+
+    offset += limit;
+  }
+
+  console.log(
+    `🎟️ Ofertas existentes en Supabase: ${existingOffers.length}`
+  );
+
+  return existingOffers;
+}
+
+async function insertOffer(offer) {
+  if (DRY_RUN) {
+    console.log(
+      `🧪 DRY RUN: oferta no insertada: ${offer.source_id}`
+    );
+    return null;
+  }
+
+  const response = await axios.post(
+    `${SUPABASE_URL}/rest/v1/event_offers?on_conflict=source,source_id`,
+    {
+      event_id: offer.event_id,
+      merchant: offer.merchant,
+      source: offer.source,
+      source_id: offer.source_id,
+      price: offer.price,
+      currency: offer.currency || "EUR",
+      ticket_type: offer.ticket_type || null,
+      affiliate_url: offer.affiliate_url,
+      last_seen_at: new Date().toISOString(),
+    },
+    {
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=ignore-duplicates,return=representation",
+      },
+    }
+  );
+
+ const insertedOffer = response.data?.[0];
+
+if (!insertedOffer?.id) {
+  console.log(
+    `⏭️ Oferta ECI ya existente, inserción omitida: ${offer.source_id}`
+  );
+  return null;
+}
+
+console.log(
+  `✅ Oferta ECI insertada: ${offer.source_id}`
+);
+
+return insertedOffer;
+}
+
+async function updateOffer(offer) {
+  if (DRY_RUN) {
+    console.log(
+      `🧪 DRY RUN: oferta no actualizada: ${offer.source_id}`
+    );
+    return null;
+  }
+
+  const response = await axios.patch(
+    `${SUPABASE_URL}/rest/v1/event_offers`,
+    {
+      event_id: offer.event_id,
+      merchant: offer.merchant,
+      price: offer.price,
+      currency: offer.currency || "EUR",
+      ticket_type: offer.ticket_type || null,
+      affiliate_url: offer.affiliate_url,
+      last_seen_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+    params: {
+  source: "eq.eci",
+  source_id: `eq.${offer.source_id}`,
+},
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+    }
+  );
+
+  const updatedOffer = response.data?.[0];
+
+  if (!updatedOffer?.id) {
+    throw new Error(
+      `No se pudo actualizar oferta ECI: ${offer.source_id}`
+    );
+  }
+
+  return updatedOffer;
 }
 
 function tokenize(value) {
@@ -439,10 +600,14 @@ function findPossibleDuplicate(event, existingEvents) {
 
   // Solo comparamos eventos de la misma fecha y ciudad
   const candidates = existingEvents.filter((existing) => {
-    return (
-      existing.event_date === event.event_date &&
-      normalizeForFingerprint(existing.city) === eventCity
-    );
+   return (
+  existing.event_date === event.event_date &&
+  (
+    event.city_id != null && existing.city_id != null
+      ? Number(event.city_id) === Number(existing.city_id)
+      : normalizeForFingerprint(existing.city) === eventCity
+  )
+);
   });
 
   let bestMatch = null;
@@ -471,13 +636,14 @@ function findPossibleDuplicate(event, existingEvents) {
     // Regla A:
     // título muy parecido
     const strongTitleMatch =
-      titleScore >= 0.75;
+  titleScore >= 0.85 &&
+  placeScore >= 0.6;
 
     // Regla B:
     // título moderadamente parecido + mismo recinto
     const strongVenueMatch =
-      titleScore >= 0.4 &&
-      placeScore >= 0.75;
+  titleScore >= 0.75 &&
+  placeScore >= 0.85;
 
     const isPossibleDuplicate =
       strongTitleMatch || strongVenueMatch;
@@ -501,9 +667,9 @@ function findPossibleDuplicate(event, existingEvents) {
 
 async function insertEvents(events) {
   if (!events.length) {
-    console.log("\nℹ️ No hay eventos nuevos para importar.");
-    return;
-  }
+  console.log("\nℹ️ No hay eventos nuevos para importar.");
+  return [];
+}
 
   console.log("\n========================================");
   console.log("📤 IMPORTACIÓN ECI");
@@ -539,7 +705,7 @@ async function insertEvents(events) {
       });
     }
 
-    return;
+       return [];
   }
 
   // ============================================================
@@ -619,7 +785,7 @@ console.log(`📥 Eventos que realmente se insertarán: ${eventsToInsert.length}
 
 if (!eventsToInsert.length) {
   console.log("ℹ️ Todos los eventos ya existen por source_url.");
-  return;
+  return [];
 }
 
 console.log(
@@ -637,6 +803,7 @@ console.log(
   const batchSize = 100;
 
 let inserted = 0;
+const insertedEvents = [];
 
 for (let i = 0; i < eventsToInsert.length; i += batchSize) {
   const originalBatch = eventsToInsert.slice(i, i + batchSize);
@@ -687,7 +854,12 @@ for (let i = 0; i < eventsToInsert.length; i += batchSize) {
  try {
   const response = await axios.post(
     `${SUPABASE_URL}/rest/v1/events?on_conflict=slug`,
-    batch,
+    batch.map(({
+  ticket_type,
+  _internalDuplicateCandidate,
+  _internalMatchSourceId,
+  ...eventData
+}) => eventData),
     {
       headers: {
         apikey: SUPABASE_KEY,
@@ -699,6 +871,13 @@ for (let i = 0; i < eventsToInsert.length; i += batchSize) {
   );
 
   inserted += response.data.length;
+  insertedEvents.push(
+  ...response.data.map((insertedEvent) => ({
+    ...insertedEvent,
+    ticket_type:
+      batch.find((event) => event.slug === insertedEvent.slug)?.ticket_type ?? null,
+  }))
+);
 
   console.log(
     `✅ Insertados ${inserted}/${eventsToInsert.length}`
@@ -709,15 +888,64 @@ for (let i = 0; i < eventsToInsert.length; i += batchSize) {
     error.response?.data?.code === "23505"
   ) {
     console.log(
-      "⚠️ Batch contiene un evento que ya existe por source/source_id. Saltando duplicado."
+      `⚠️ Conflicto en lote de ${batch.length} eventos. Recuperando individualmente...`
     );
-    continue;
-  }
 
-  console.error("❌ ERROR INSERTANDO EN SUPABASE");
-  console.error("Status:", error.response?.status);
-  console.error("Detalle:", error.response?.data);
-  throw error;
+    for (const event of batch) {
+      try {
+        const response = await axios.post(
+          `${SUPABASE_URL}/rest/v1/events?on_conflict=slug`,
+          [{ ...Object.fromEntries(
+  Object.entries(event).filter(
+  ([key]) =>
+    ![
+      "ticket_type",
+      "_internalDuplicateCandidate",
+      "_internalMatchSourceId"
+    ].includes(key)
+)
+) }],
+          {
+            headers: {
+              apikey: SUPABASE_KEY,
+              Authorization: `Bearer ${SUPABASE_KEY}`,
+              "Content-Type": "application/json",
+              Prefer: "resolution=ignore-duplicates,return=representation",
+            },
+          }
+        );
+
+        inserted += response.data.length;
+        insertedEvents.push(
+  ...response.data.map((insertedEvent) => ({
+    ...insertedEvent,
+    ticket_type: event.ticket_type ?? null,
+  }))
+);
+      } catch (individualError) {
+        if (
+          individualError.response?.status === 409 &&
+          individualError.response?.data?.code === "23505"
+        ) {
+          console.log(
+            `⏭️ Duplicado omitido: ${event.title}`
+          );
+          continue;
+        }
+
+        throw individualError;
+      }
+    }
+
+    console.log(
+      `✅ Recuperación completada. Insertados: ${inserted}`
+    );
+  } else {
+    console.error("❌ ERROR INSERTANDO EN SUPABASE");
+    console.error("Status:", error.response?.status);
+    console.error("Detalle:", error.response?.data);
+    throw error;
+  }
 }
 
    console.log(
@@ -728,6 +956,44 @@ for (let i = 0; i < eventsToInsert.length; i += batchSize) {
   console.log(
     `\n🎉 Importación terminada: ${inserted} eventos insertados.`
   );
+  return insertedEvents;
+}
+
+async function insertOffersForNewEvents(insertedEvents) {
+  for (const event of insertedEvents) {
+    const offer = {
+      event_id: event.id,
+      merchant: "El Corte Inglés",
+      source: "eci",
+      source_id: String(event.source_id),
+      price: event.price,
+      currency: "EUR",
+      ticket_type: event.ticket_type || null,
+      affiliate_url: event.source_url,
+    };
+
+    const validOffer =
+  offer.event_id &&
+  offer.source_id &&
+  offer.source_id !== "undefined" &&
+  Number.isFinite(Number(offer.price)) &&
+  Number(offer.price) > 0 &&
+  offer.currency === "EUR" &&
+  (() => {
+    try {
+      return new URL(offer.affiliate_url).hostname === "www.awin1.com";
+    } catch {
+      return false;
+    }
+  })();
+
+if (!validOffer) {
+  console.log(`⚠️ Oferta ECI inválida: ${offer.source_id}`);
+  continue;
+}
+
+await insertOffer(offer);
+  }
 }
 
 async function updateAffiliateLinks(items) {
@@ -817,6 +1083,29 @@ async function main() {
     .map(transformRow)
     .filter(Boolean);
 
+    // Vincular eventos ECI con las ciudades de Supabase
+const geo = await loadGeoCities();
+
+let linkedCities = 0;
+let unlinkedCities = 0;
+
+for (const event of events) {
+  const geoCity = findGeoCity(geo, event.city, "espana");
+
+  if (geoCity) {
+    event.city_id = geoCity.id;
+    linkedCities++;
+  } else {
+    event.city_id = null;
+    unlinkedCities++;
+    console.log(`⚠️ Ciudad sin vincular: ${event.city}`);
+  }
+}
+
+console.log(
+  `🌍 Ciudades vinculadas: ${linkedCities} | Sin vincular: ${unlinkedCities}`
+);
+
   console.log(`🎟️ Eventos válidos transformados: ${events.length}`);
   console.log(
     `⏭️ Registros descartados por falta de datos: ${
@@ -884,6 +1173,15 @@ for (const event of events) {
 
 const existingEvents = await getExistingFingerprints();
 
+const existingOffers = await getExistingOffers();
+
+const existingOffersMap = new Map(
+  existingOffers.map((offer) => [
+    `${offer.source}|${offer.source_id}`,
+    offer,
+  ])
+);
+
 const fingerprintMap = new Map(
   existingEvents
     .filter((event) => event.fingerprint)
@@ -893,6 +1191,8 @@ const fingerprintMap = new Map(
 const exactDuplicates = [];
 const possibleDuplicates = [];
 const reallyNewEvents = [];
+const newFingerprints = new Set();
+let internalDuplicates = 0;
 
 for (const event of events) {
   // 1. Primero buscamos fingerprint exacto
@@ -928,9 +1228,45 @@ for (const event of events) {
     continue;
   }
 
-  // 3. No encontramos nada parecido
-  reallyNewEvents.push(event);
+  // Comprobar duplicados flexibles entre eventos nuevos de ECI
+const internalMatch = findPossibleDuplicate(
+  event,
+  reallyNewEvents
+);
+
+if (internalMatch) {
+  internalDuplicates++;
+
+  console.log(
+    `⚠️ Duplicado interno ECI: ${event.title} [${event.source_id}] ↔ ${internalMatch.existing.title} [${internalMatch.existing.source_id}]`
+  );
+
+  // Pendiente de decidir si es otra modalidad
+  // o una experiencia realmente diferente.
+  // No descartamos el producto ni su enlace.
+  event._internalDuplicateCandidate = true;
+  event._internalMatchSourceId = internalMatch.existing.source_id;
 }
+
+ // 3. Evitar duplicados exactos dentro del propio feed ECI
+if (newFingerprints.has(event.fingerprint)) {
+  internalDuplicates++;
+
+  console.log(
+  `🎟️ Modalidad ECI descartada: ${event.title} | ID: ${event.source_id} | Tipo: ${event.ticket_type || "Sin especificar"}`
+);
+  continue;
+}
+
+newFingerprints.add(event.fingerprint);
+
+// 4. Evento realmente nuevo
+reallyNewEvents.push(event);
+}
+
+console.log(
+  `🔎 Coincidencias internas ECI detectadas: ${internalDuplicates}`
+);
 
 console.log("\n========================================");
 console.log("📊 COMPARACIÓN ECI ↔ SUPABASE");
@@ -1211,6 +1547,123 @@ if (!safeAffiliateMatch) {
 
   return true;
 });
+
+const matchedEciEvents = [
+  ...exactDuplicates,
+  ...possibleDuplicates,
+].filter((item) => {
+  if (!item.existing?.id) {
+    return false;
+  }
+
+  const sameDate =
+    item.eci.event_date === item.existing.event_date;
+
+  const sameCity =
+    normalizeForFingerprint(item.eci.city) ===
+    normalizeForFingerprint(item.existing.city);
+
+  const titleScore = titleSimilarity(
+    item.eci.title,
+    item.existing.title
+  );
+
+  const samePlace =
+    normalizeForFingerprint(item.eci.place) ===
+    normalizeForFingerprint(item.existing.place);
+
+  const exactTitle =
+    normalizeForFingerprint(item.eci.title) ===
+    normalizeForFingerprint(item.existing.title);
+
+  return (
+    sameDate &&
+    sameCity &&
+    (
+      exactTitle ||
+      (titleScore >= 0.90 && samePlace)
+    )
+  );
+});
+
+console.log(
+  `🎟️ Coincidencias seguras para ofertas ECI: ${matchedEciEvents.length}`
+);
+
+const eciOffers = matchedEciEvents
+  .filter((item) =>
+    item.eci.source_id &&
+    item.eci.source_url &&
+    item.existing?.id
+  )
+  .map((item) => ({
+    event_id: item.existing.id,
+    merchant: "El Corte Inglés",
+    source: "eci",
+    source_id: String(item.eci.source_id),
+    price: item.eci.price,
+    currency: "EUR",
+    ticket_type: item.eci.ticket_type || null,
+    affiliate_url: item.eci.source_url,
+  }));
+
+console.log(
+  `🎟️ Ofertas ECI preparadas: ${eciOffers.length}`
+);
+
+const newEciOffers = [];
+const changedEciOffers = [];
+const unchangedEciOffers = [];
+
+const processedOfferKeys = new Set();
+
+for (const offer of eciOffers) {
+  const key = `${offer.source}|${offer.source_id}`;
+
+  // Evitar procesar dos veces el mismo producto del feed
+  if (processedOfferKeys.has(key)) {
+    continue;
+  }
+
+  processedOfferKeys.add(key);
+
+  const existing = existingOffersMap.get(key);
+
+  if (!existing) {
+    newEciOffers.push(offer);
+    continue;
+  }
+
+ const hasChanged =
+  existing.event_id !== offer.event_id ||
+  Number(existing.price) !== Number(offer.price) ||
+  existing.currency !== offer.currency ||
+  (existing.ticket_type || null) !== (offer.ticket_type || null) ||
+  existing.affiliate_url !== offer.affiliate_url;
+
+  if (hasChanged) {
+  changedEciOffers.push(offer);
+
+  console.log("🔄 CAMBIO OFERTA ECI:", {
+    source_id: offer.source_id,
+    event_id_anterior: existing.event_id,
+    event_id_nuevo: offer.event_id,
+    precio_anterior: existing.price,
+    precio_nuevo: offer.price,
+    tipo_anterior: existing.ticket_type,
+    tipo_nuevo: offer.ticket_type,
+    enlace_cambiado: existing.affiliate_url !== offer.affiliate_url,
+  });
+} else {
+    unchangedEciOffers.push(offer);
+  }
+}
+
+console.log("\n🎟️ RESUMEN DE OFERTAS ECI");
+console.log(`🆕 Nuevas: ${newEciOffers.length}`);
+console.log(`🔄 Modificadas: ${changedEciOffers.length}`);
+console.log(`⏭️ Sin cambios: ${unchangedEciOffers.length}`);
+
 console.log(
   `🔗 Eventos existentes que podrían pasar a Awin: ${affiliateUpdates.length}`
 );
@@ -1225,7 +1678,7 @@ for (const item of affiliateUpdates.slice(0, 30)) {
   console.log(`💰 URL Awin: ${item.eci.source_url}`);
 }
 
-await updateAffiliateLinks(affiliateUpdates);
+// await updateAffiliateLinks(affiliateUpdates);
 
 // ============================================================
 // 3. BUSCAR POSIBLES DUPLICADOS QUE SE NOS HAYAN ESCAPADO
@@ -1330,7 +1783,175 @@ for (const item of suspiciousNewEvents.slice(0, 50)) {
 
 console.log("\n========================================");
 
-await insertEvents(reallyNewEvents);
+// ============================================================
+// GUARDAR OFERTAS DE EL CORTE INGLÉS
+// ============================================================
+
+console.log("\n========================================");
+console.log("🎟️ SINCRONIZACIÓN DE OFERTAS ECI");
+console.log("========================================");
+
+console.log(`🆕 Nuevas: ${newEciOffers.length}`);
+console.log(`🔄 Modificadas: ${changedEciOffers.length}`);
+console.log(`⏭️ Sin cambios: ${unchangedEciOffers.length}`);
+
+console.log("\n🔎 COMPARACIÓN ECI VS SUPABASE");
+
+for (const offer of newEciOffers.slice(0, 5)) {
+  const match = matchedEciEvents.find(
+    (item) =>
+      String(item.eci.source_id) === offer.source_id &&
+      item.existing.id === offer.event_id
+  );
+
+  console.log({
+    titulo_eci: match?.eci.title,
+    titulo_supabase: match?.existing.title,
+    fecha_eci: match?.eci.event_date,
+    fecha_supabase: match?.existing.event_date,
+    ciudad_eci: match?.eci.city,
+    ciudad_supabase: match?.existing.city,
+  });
+}
+
+console.log("\n🔎 VALIDACIÓN DE LAS 5 OFERTAS ECI");
+
+for (const offer of newEciOffers.slice(0, 5)) {
+  console.log({
+    event_id: offer.event_id,
+    source_id: offer.source_id,
+
+    titulo_evento:
+  existingEvents.find((event) => event.id === offer.event_id)?.title ||
+  "NO ENCONTRADO",
+
+  fecha_evento:
+  existingEvents.find((event) => event.id === offer.event_id)?.event_date,
+
+ciudad_evento:
+  existingEvents.find((event) => event.id === offer.event_id)?.city,
+
+dominio_afiliado: (() => {
+  try {
+    return new URL(offer.affiliate_url).hostname;
+  } catch {
+    return "URL INVÁLIDA";
+  }
+})(),
+    price: offer.price,
+    currency: offer.currency,
+    affiliate_url_valida:
+      typeof offer.affiliate_url === "string" &&
+      offer.affiliate_url.startsWith("https://"),
+  });
+}
+
+ console.log(
+  "🔎 PRIMERAS 5 OFERTAS ECI:",
+  newEciOffers.slice(0, 5).map((offer) => ({
+    event_id: offer.event_id,
+    source_id: offer.source_id,
+    price: offer.price,
+    ticket_type: offer.ticket_type,
+    affiliate_url: offer.affiliate_url,
+  }))
+);
+
+if (DRY_RUN || !ECI_INSERT_OFFERS) {
+  console.log(
+    "🛡️ Inserción de ofertas ECI desactivada."
+  );
+} else {
+
+ 
+ const offersToInsert = ECI_TEST_MODE
+  ? newEciOffers.slice(0, ECI_TEST_LIMIT)
+  : newEciOffers;
+
+console.log(
+  `🧪 Ofertas seleccionadas para insertar: ${offersToInsert.length}`
+);
+
+for (const offer of offersToInsert) {
+  const validOffer =
+    offer.event_id &&
+    offer.source_id &&
+    Number.isFinite(Number(offer.price)) &&
+    Number(offer.price) > 0 &&
+    offer.currency === "EUR" &&
+    (() => {
+      try {
+        return new URL(offer.affiliate_url).hostname === "www.awin1.com";
+      } catch {
+        return false;
+      }
+    })();
+
+  if (!validOffer) {
+    throw new Error(
+      `Oferta ECI inválida: ${offer.source_id}`
+    );
+  }
+
+    await insertOffer(offer);
+}
+
+  console.log("✅ Inserción de ofertas ECI terminada.");
+}
+
+// Actualizaciones independientes de las inserciones
+if (ECI_UPDATE_OFFERS && !DRY_RUN) {
+  for (const offer of changedEciOffers.slice(0, ECI_TEST_MODE ? ECI_TEST_LIMIT : undefined)) {
+
+    const key = `${offer.source}|${offer.source_id}`;
+const previous = existingOffersMap.get(key);
+
+if (!previous || previous.event_id !== offer.event_id) {
+  console.log(
+    `⚠️ Asociación de evento pendiente de revisión: ${offer.source_id}`
+  );
+  continue;
+}
+
+const oldPrice = Number(previous?.price);
+const newPrice = Number(offer.price);
+
+if (
+  !Number.isFinite(oldPrice) ||
+  !Number.isFinite(newPrice) ||
+  oldPrice <= 0 ||
+  newPrice <= 0 ||
+  Math.abs((newPrice - oldPrice) / oldPrice) > 0.30
+) {
+  console.log(`⚠️ Precio pendiente de revisión: ${offer.source_id}`);
+  continue;
+}
+
+    await updateOffer(offer);
+  }
+} else {
+  console.log("🛡️ Actualizaciones de ofertas ECI desactivadas.");
+}
+
+  console.log("✅ Sincronización de ofertas ECI terminada.");
+
+
+// Importación de eventos desactivada temporalmente.
+// Solo estamos probando las ofertas de El Corte Inglés.
+if (DRY_RUN || !ECI_IMPORT_EVENTS) {
+  console.log("🛡️ Importación de eventos nuevos desactivada.");
+} else {
+  const safeNewEvents = reallyNewEvents.filter(
+  (event) => !event._internalDuplicateCandidate
+);
+
+console.log(
+  `🛡️ Eventos nuevos seguros: ${safeNewEvents.length} | Pendientes de revisión: ${reallyNewEvents.length - safeNewEvents.length}`
+);
+
+const insertedEvents = await insertEvents(safeNewEvents);
+  await insertOffersForNewEvents(insertedEvents);
+}
 
 if (DRY_RUN) {
   console.log(
