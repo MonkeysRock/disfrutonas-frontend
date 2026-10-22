@@ -245,8 +245,9 @@ while (true) {
       `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today})`
     )
     .order("event_date", { ascending: true })
-    .order("created_at", { ascending: false })
-    .range(from, from + pageSize - 1);
+.order("created_at", { ascending: false })
+.order("id", { ascending: true })
+.range(from, from + pageSize - 1);
 
   if (error) {
     loadError = error.message;
@@ -268,9 +269,17 @@ while (true) {
         return;
       }
 
-     const mappedEvents = allData.map((event) =>
-        mapSupabaseEvent(event as SupabaseEvent)
-      );
+     const uniqueEvents = Array.from(
+  new Map(allData.map((event) => [event.id, event])).values()
+);
+
+console.log(
+  `Eventos descargados: ${allData.length}, únicos: ${uniqueEvents.length}`
+);
+
+const mappedEvents = uniqueEvents.map((event) =>
+  mapSupabaseEvent(event as SupabaseEvent)
+);
 
       setEvents(mappedEvents);
       setIsLoadingEvents(false);
