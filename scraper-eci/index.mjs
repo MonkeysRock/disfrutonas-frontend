@@ -594,6 +594,12 @@ function placeSimilarity(a, b) {
     Math.min(tokensA.size, tokensB.size)
   );
 }
+function normalizeEventWithoutTicketType(title) {
+  return normalizeForFingerprint(title)
+    .replace(/\b(vip|premium|general|reducida|reducido|flexible)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function findPossibleDuplicate(event, existingEvents) {
   const eventCity = normalizeForFingerprint(event.city);
@@ -858,6 +864,7 @@ for (let i = 0; i < eventsToInsert.length; i += batchSize) {
   ticket_type,
   _internalDuplicateCandidate,
   _internalMatchSourceId,
+  _mainSourceId,
   ...eventData
 }) => eventData),
     {
@@ -899,10 +906,11 @@ for (let i = 0; i < eventsToInsert.length; i += batchSize) {
   Object.entries(event).filter(
   ([key]) =>
     ![
-      "ticket_type",
-      "_internalDuplicateCandidate",
-      "_internalMatchSourceId"
-    ].includes(key)
+  "ticket_type",
+  "_internalDuplicateCandidate",
+  "_internalMatchSourceId",
+  "_mainSourceId"
+].includes(key)
 )
 ) }],
           {
@@ -959,8 +967,28 @@ for (let i = 0; i < eventsToInsert.length; i += batchSize) {
   return insertedEvents;
 }
 
-async function insertOffersForNewEvents(insertedEvents) {
-  for (const event of insertedEvents) {
+async function insertOffersForNewEvents(
+  insertedEvents,
+  additionalEciOffers = []
+) {
+  const eventIdBySourceId = new Map(
+    insertedEvents.map(event => [
+      String(event.source_id),
+      event.id
+    ])
+  );
+
+  const extraOffers = additionalEciOffers
+    .filter(event => event._mainSourceId)
+    .map(event => ({
+      ...event,
+      id: eventIdBySourceId.get(String(event._mainSourceId))
+    }))
+    .filter(event => event.id);
+
+  const allOffers = [...insertedEvents, ...extraOffers];
+
+  for (const event of allOffers) {
     const offer = {
       event_id: event.id,
       merchant: "El Corte Inglés",
@@ -1192,6 +1220,12 @@ const exactDuplicates = [];
 const possibleDuplicates = [];
 const reallyNewEvents = [];
 const newFingerprints = new Set();
+const newEventsByFingerprint = new Map();
+
+// Modalidades adicionales de eventos nuevos.
+// Se conservan para asociarlas posteriormente
+// a una única ficha de evento.
+const additionalEciOffers = [];
 let internalDuplicates = 0;
 
 for (const event of events) {
@@ -1234,6 +1268,33 @@ const internalMatch = findPossibleDuplicate(
   reallyNewEvents
 );
 
+// Coincidencia estricta para modalidades de entradas.
+// Respetamos tanto la fecha inicial como la final.
+const sameEventForOffers = reallyNewEvents.find(main =>
+  normalizeEventWithoutTicketType(main.title) ===
+    normalizeEventWithoutTicketType(event.title) &&
+  normalizeForFingerprint(main.city) ===
+    normalizeForFingerprint(event.city) &&
+  normalizeForFingerprint(main.place) ===
+    normalizeForFingerprint(event.place) &&
+  main.event_date === event.event_date &&
+  (main.end_date || null) === (event.end_date || null) &&
+  main.source_id !== event.source_id
+);
+
+if (sameEventForOffers) {
+  additionalEciOffers.push({
+    ...event,
+    _mainSourceId: sameEventForOffers.source_id,
+  });
+
+  console.log(
+    `🎟️ Modalidad agrupada: ${event.title} → ${sameEventForOffers.title}`
+  );
+
+  continue;
+}
+
 if (internalMatch) {
   internalDuplicates++;
 
@@ -1252,13 +1313,22 @@ if (internalMatch) {
 if (newFingerprints.has(event.fingerprint)) {
   internalDuplicates++;
 
+  const mainEvent = newEventsByFingerprint.get(event.fingerprint);
+
+  additionalEciOffers.push({
+    ...event,
+    _mainSourceId: mainEvent.source_id,
+  });
+
   console.log(
-  `🎟️ Modalidad ECI descartada: ${event.title} | ID: ${event.source_id} | Tipo: ${event.ticket_type || "Sin especificar"}`
-);
+    `🎟️ Modalidad ECI conservada: ${event.title} | ${event.ticket_type || "Sin especificar"} | Evento principal: ${mainEvent.source_id}`
+  );
+
   continue;
 }
 
 newFingerprints.add(event.fingerprint);
+newEventsByFingerprint.set(event.fingerprint, event);
 
 // 4. Evento realmente nuevo
 reallyNewEvents.push(event);
@@ -1950,7 +2020,10 @@ console.log(
 );
 
 const insertedEvents = await insertEvents(safeNewEvents);
-  await insertOffersForNewEvents(insertedEvents);
+  await insertOffersForNewEvents(
+  insertedEvents,
+  additionalEciOffers
+);
 }
 
 if (DRY_RUN) {
