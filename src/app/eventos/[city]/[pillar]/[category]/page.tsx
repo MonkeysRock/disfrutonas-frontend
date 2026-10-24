@@ -14,7 +14,12 @@ async function getEventsByCityPillarAndCategory(
 
     .from("events")
     .select("*")
-    .eq("city_slug", city.toLowerCase())
+    .in(
+  "city_slug",
+  ["donostia", "san-sebastian"].includes(city.toLowerCase())
+    ? ["donostia", "san-sebastian"]
+    : [city.toLowerCase()]
+)
     .eq("pillar_slug", pillar)
     .eq("category_slug", category)
     .or(
@@ -31,8 +36,16 @@ async function getEventsByCityPillarAndCategory(
     id: event.id,
     title: event.title || "Evento sin título",
     slug: event.slug || event.id,
-    city: event.city || "",
-    citySlug: event.city_slug || "",
+    city:
+  ["donostia", "san sebastian", "san sebastián"].includes(
+    (event.city || "").trim().toLowerCase()
+  )
+    ? "San Sebastián"
+    : event.city || "",
+    citySlug:
+  ["donostia", "san-sebastian"].includes(event.city_slug || "")
+    ? "san-sebastian"
+    : event.city_slug || "",
     pillar: event.pillar || "",
     pillarSlug: event.pillar_slug || "",
     category: event.category || "",

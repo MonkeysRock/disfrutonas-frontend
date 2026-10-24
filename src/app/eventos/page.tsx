@@ -93,8 +93,16 @@ function mapSupabaseEvent(event: SupabaseEvent): AppEvent {
   return {
     title: event.title || "Evento sin título",
     slug: event.slug || event.id,
-    city: event.city || "",
-    citySlug: event.city_slug || "",
+    city:
+  ["donostia", "san sebastian", "san sebastián"].includes(
+    (event.city || "").trim().toLowerCase()
+  )
+    ? "San Sebastián"
+    : event.city || "",
+    citySlug:
+  ["donostia", "san-sebastian"].includes(event.city_slug || "")
+    ? "san-sebastian"
+    : event.city_slug || "",
     pillar: event.pillar || "Culturales",
     pillarSlug: event.pillar_slug || "culturales",
     category: event.category || "General",
@@ -360,7 +368,13 @@ const mappedEvents = uniqueEvents.map((event) =>
     if (precioMaxParam) setPriceMax(Number(precioMaxParam));
 
     if (ubicacionNombre) {
-      setLocationInput(ubicacionNombre);
+      setLocationInput(
+  ["donostia", "san sebastian", "san sebastián"].includes(
+    normalizeText(ubicacionNombre)
+  )
+    ? "San Sebastián"
+    : ubicacionNombre
+);
       return;
     }
 
@@ -388,14 +402,36 @@ const mappedEvents = uniqueEvents.map((event) =>
     const normalizedInput = normalizeText(locationInput);
 
     return events.filter((event) => {
-      const matchesLocationFromParam = ubicacionParam
-        ? event.citySlug === ubicacionParam
-        : true;
+      const normalizeCitySlug = (slug: string) => {
+  if (slug === "donostia" || slug === "san-sebastian") {
+    return "san-sebastian";
+  }
 
-      const matchesLocationFromInput = locationInput
-        ? normalizeText(event.city).includes(normalizedInput) ||
-          normalizeText(event.place || "").includes(normalizedInput)
-        : true;
+  return slug;
+};
+
+const matchesLocationFromParam = ubicacionParam
+  ? normalizeCitySlug(event.citySlug) ===
+    normalizeCitySlug(ubicacionParam)
+  : true;
+
+      const cityNormalized = normalizeText(event.city);
+
+const isSanSebastianSearch =
+  normalizedInput === "san sebastian" ||
+  normalizedInput === "donostia" ||
+  normalizedInput === "donostia san sebastian";
+
+const isSanSebastianEvent =
+  cityNormalized === "donostia" ||
+  cityNormalized === "san sebastian" ||
+  cityNormalized === "donostia san sebastian";
+
+const matchesLocationFromInput = locationInput
+  ? (isSanSebastianSearch && isSanSebastianEvent) ||
+    cityNormalized.includes(normalizedInput) ||
+    normalizeText(event.place || "").includes(normalizedInput)
+  : true;
 
       const matchesLocation = ubicacionParam
         ? matchesLocationFromParam

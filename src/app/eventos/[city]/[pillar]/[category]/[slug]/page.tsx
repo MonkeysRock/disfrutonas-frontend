@@ -79,8 +79,16 @@ function mapSupabaseEvent(event: SupabaseEvent): EventDetail {
     id: event.id,
     title: event.title || "Evento sin título",
     slug: event.slug || event.id,
-    city: event.city || "",
-    citySlug: event.city_slug || "",
+    city:
+  ["donostia", "san sebastian", "san sebastián"].includes(
+    (event.city || "").trim().toLowerCase()
+  )
+    ? "San Sebastián"
+    : event.city || "",
+    citySlug:
+  ["donostia", "san-sebastian"].includes(event.city_slug || "")
+    ? "san-sebastian"
+    : event.city_slug || "",
     pillar: event.pillar || "Culturales",
     pillarSlug: event.pillar_slug || "culturales",
     category: event.category || "General",
@@ -117,7 +125,12 @@ async function getEventByFullPath(params: PageParams) {
   const { data, error } = await supabase
     .from("events")
     .select("*")
-    .eq("city_slug", params.city)
+    .in(
+  "city_slug",
+  ["donostia", "san-sebastian"].includes(params.city)
+    ? ["donostia", "san-sebastian"]
+    : [params.city]
+)
     .eq("pillar_slug", params.pillar)
     .eq("category_slug", params.category)
     .eq("slug", params.slug)
@@ -171,7 +184,12 @@ export async function generateMetadata({
   const titleHasYear = /\b(19|20)\d{2}\b/.test(event.title);
   const pageTitle = `${event.title}${!titleHasYear && eventYear ? ` ${eventYear}` : ""} en ${event.city}`;
   const pageDescription = `${event.title} · ${event.date} · ${event.place}. ${event.description}`;
-  const canonicalPath = `/eventos/${event.citySlug}/${event.pillarSlug}/${event.categorySlug}/${event.slug}`;
+  const canonicalCitySlug =
+  ["donostia", "san-sebastian"].includes(event.citySlug)
+    ? "san-sebastian"
+    : event.citySlug;
+
+const canonicalPath = `/eventos/${canonicalCitySlug}/${event.pillarSlug}/${event.categorySlug}/${event.slug}`;
   const absoluteUrl = `${SITE_URL}${canonicalPath}`;
 
   return {

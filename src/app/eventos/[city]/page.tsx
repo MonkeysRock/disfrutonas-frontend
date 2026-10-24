@@ -11,7 +11,12 @@ async function getEventsByCity(city: string) {
   const { data, error } = await supabase
     .from("events")
     .select("*")
-    .eq("city_slug", city.toLowerCase())
+   .in(
+  "city_slug",
+  ["donostia", "san-sebastian"].includes(city.toLowerCase())
+    ? ["donostia", "san-sebastian"]
+    : [city.toLowerCase()]
+)
     .or(
   `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today})`
 )
@@ -26,8 +31,16 @@ async function getEventsByCity(city: string) {
     id: event.id,
     title: event.title || "Evento sin título",
     slug: event.slug || event.id,
-    city: event.city || "",
-    citySlug: event.city_slug || "",
+    city:
+  ["donostia", "san sebastian", "san sebastián"].includes(
+    (event.city || "").trim().toLowerCase()
+  )
+    ? "San Sebastián"
+    : event.city || "",
+    citySlug:
+  ["donostia", "san-sebastian"].includes(event.city_slug || "")
+    ? "san-sebastian"
+    : event.city_slug || "",
     pillar: event.pillar || "",
     pillarSlug: event.pillar_slug || "",
     category: event.category || "",
@@ -55,6 +68,10 @@ imageAlt: event.image_alt || event.title || "Evento",
 }
 
 function cityNameFromSlug(city: string) {
+  if (city === "donostia" || city === "san-sebastian") {
+    return "San Sebastián";
+  }
+
   return city
     .split("-")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
