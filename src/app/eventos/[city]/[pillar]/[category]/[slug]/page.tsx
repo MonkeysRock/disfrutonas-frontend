@@ -143,6 +143,30 @@ async function getEventByFullPath(params: PageParams) {
 
   return mapSupabaseEvent(data as SupabaseEvent);
 }
+type EventOffer = {
+  id: string;
+  merchant: string;
+  source: string;
+  price: number;
+  currency: string;
+  affiliate_url: string;
+};
+
+async function getEventOffers(eventId: string): Promise<EventOffer[]> {
+  const { data, error } = await supabase
+    .from("event_offers")
+    .select("id, merchant, source, price, currency, affiliate_url")
+    .eq("event_id", eventId)
+    .gt("price", 0)
+    .order("price", { ascending: true });
+
+  if (error) {
+    console.error("Error cargando ofertas:", error);
+    return [];
+  }
+
+  return (data || []) as EventOffer[];
+}
 
 async function getRelatedEvents(event: EventDetail) {
   const today = new Date().toISOString().split("T")[0];
@@ -153,7 +177,7 @@ async function getRelatedEvents(event: EventDetail) {
     .neq("id", event.id)
     .or(`city_slug.eq.${event.citySlug},category_slug.eq.${event.categorySlug}`)
     .or(
-      `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today})`
+      `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today}),and(source.eq.tiqets,event_date.is.null)`
     )
     .order("event_date", { ascending: true })
     .limit(3);
@@ -180,7 +204,7 @@ export async function generateMetadata({
     };
   }
 
-  const eventYear = event.date ? event.date.slice(0, 4) : "";
+  const eventYear = /^\d{4}-\d{2}-\d{2}$/.test(event.eventDate) ? event.eventDate.slice(0, 4) : "";
   const titleHasYear = /\b(19|20)\d{2}\b/.test(event.title);
   const pageTitle = `${event.title}${!titleHasYear && eventYear ? ` ${eventYear}` : ""} en ${event.city}`;
   const pageDescription = `${event.title} · ${event.date} · ${event.place}. ${event.description}`;
@@ -225,8 +249,10 @@ const canonicalPath = `/eventos/${canonicalCitySlug}/${event.pillarSlug}/${event
 
 function formatEventDate(date?: string) {
   if (!date) return "Fecha por confirmar";
+  if (date.toLowerCase() === "permanente") return "Permanente";
 
   const parsed = new Date(`${date}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return "Fecha por confirmar";
 
   return new Intl.DateTimeFormat("es-ES", {
     day: "numeric",
@@ -313,14 +339,35 @@ export default async function EventDetailPage({
       </main>
     );
   }
-
+const eventOffers = await getEventOffers(event.id);
   const relatedEvents = await getRelatedEvents(event);
   const narrativeBlocks = buildEventNarrative(event);
 
   const eventUrl = `${SITE_URL}/eventos/${event.citySlug}/${event.pillarSlug}/${event.categorySlug}/${event.slug}`;
   const startDate = `${event.eventDate}T${event.time}:00`;
 
-  const eventJsonLd = {
+  const isPermanent = !event.eventDate && event.date === "Permanente";
+
+  const eventJsonLd = isPermanent
+    ? {
+        "@context": "https://schema.org",
+        "@type": "TouristAttraction",
+        name: event.title,
+        description: event.description,
+        image: [event.image],
+        url: eventUrl,
+        geo: {
+          "@type": "GeoCoordinates",
+          latitude: event.lat,
+          longitude: event.lng,
+        },
+        address: {
+          "@type": "PostalAddress",
+          addressLocality: event.city,
+          addressCountry: "ES",
+        },
+      }
+    : {
     "@context": "https://schema.org",
     "@type": "Event",
     name: event.title,
@@ -450,8 +497,8 @@ export default async function EventDetailPage({
 
                 <h1 className="m-0 max-w-[900px] text-3xl font-extrabold leading-tight text-white sm:text-5xl lg:text-6xl">
                   {event.title}
-{!/\b(19|20)\d{2}\b/.test(event.title) && event.date
-  ? ` ${event.date.slice(0, 4)}`
+{!/\b(19|20)\d{2}\b/.test(event.title) && /^\d{4}-\d{2}-\d{2}$/.test(event.eventDate)
+  ? ` ${event.eventDate.slice(0, 4)}`
   : ""}
                 </h1>
 
@@ -526,7 +573,7 @@ export default async function EventDetailPage({
               <div>
                 <h2 className="mb-4 mt-0 text-[28px] sm:text-[30px]">
   {event.title}
-  {event.date ? ` ${event.date}` : ""}
+  {event.eventDate ? ` ${event.eventDate}` : ""}
 </h2>
 
                 <div className="space-y-5 text-base leading-8 text-[#555] sm:text-lg">
@@ -543,18 +590,53 @@ export default async function EventDetailPage({
           <aside className="order-2 rounded-[28px] border border-[#eee] bg-white p-5 shadow-[0_12px_30px_rgba(0,0,0,0.05)] lg:order-1 lg:sticky lg:top-28 lg:h-fit lg:p-6">
             <div className="mb-1.5 text-sm font-bold text-[#777]">ENTRADAS</div>
 
-            <div className="mb-5 text-4xl font-extrabold sm:text-5xl">
-              {event.isFree ? "Gratis" : `${event.price}€`}
-            </div>
+            {eventOffers.length > 0 ? (
+  <>
+    <div className="mb-5 text-4xl font-extrabold sm:text-3xl">
+      Desde {eventOffers[0].price.toFixed(2).replace(".", ",")} €
+    </div>
 
-            <a
-              href={event.sourceUrl || "#"}
-              target={event.sourceUrl ? "_blank" : undefined}
-              rel={event.sourceUrl ? "noreferrer" : undefined}
-              className="mb-3 block w-full rounded-[14px] border-none bg-[#111] px-[18px] py-4 text-center text-base font-bold text-white no-underline transition hover:bg-[#222]"
-            >
-              Comprar entrada
-            </a>
+    <div className="mb-5 space-y-3">
+      {eventOffers.map((offer) => (
+        <div
+          key={offer.id}
+          className="rounded-[14px] border border-[#eee] p-4"
+        >
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <span className="font-bold">{offer.merchant}</span>
+            <span className="font-extrabold">
+              {offer.price.toFixed(2).replace(".", ",")} €
+            </span>
+          </div>
+
+          <a
+            href={offer.affiliate_url}
+            target="_blank"
+            rel="noopener noreferrer sponsored"
+            className="block w-full rounded-[12px] bg-[#111] px-4 py-3 text-center font-bold text-white no-underline hover:bg-[#222]"
+          >
+            Ver entradas
+          </a>
+        </div>
+      ))}
+    </div>
+  </>
+) : (
+  <>
+    <div className="mb-5 text-4xl font-extrabold sm:text-5xl">
+      {event.isFree ? "Gratis" : `${event.price}€`}
+    </div>
+
+    <a
+      href={event.sourceUrl || "#"}
+      target={event.sourceUrl ? "_blank" : undefined}
+      rel={event.sourceUrl ? "noreferrer" : undefined}
+      className="mb-3 block w-full rounded-[14px] bg-[#111] px-[18px] py-4 text-center text-base font-bold text-white no-underline transition hover:bg-[#222]"
+    >
+      Comprar entrada
+    </a>
+  </>
+)}
 
             <button className="mb-5 w-full cursor-pointer rounded-[14px] border border-[#ddd] bg-white px-[18px] py-4 text-base font-bold text-[#111] transition hover:bg-[#fafafa]">
               Guardar evento

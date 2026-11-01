@@ -42,6 +42,7 @@ type AppEvent = {
   eventDate: string;
   endDate?: string;
   date: string;
+  source: string;
   time: string;
   place: string;
   description: string;
@@ -81,6 +82,7 @@ type SupabaseEvent = {
   image_sub_label: string | null;
   lat: number | null;
   lng: number | null;
+  source: string | null;
   source_url: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -109,6 +111,7 @@ function mapSupabaseEvent(event: SupabaseEvent): AppEvent {
     categorySlug: event.category_slug || "general",
     eventDate: event.event_date || "",
     date: event.date || event.event_date || "",
+    source: event.source || "",
     endDate: event.end_date || "",
     time: event.time || "",
     place: event.place || "",
@@ -250,8 +253,8 @@ while (true) {
     .from("events")
     .select("*")
     .or(
-      `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today})`
-    )
+  `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today}),and(source.eq.tiqets,event_date.is.null)`
+)
     .order("event_date", { ascending: true })
 .order("created_at", { ascending: false })
 .order("id", { ascending: true })
@@ -437,6 +440,10 @@ const matchesLocationFromInput = locationInput
         ? matchesLocationFromParam
         : matchesLocationFromInput;
 
+        const isPermanent =
+  event.source === "tiqets" &&
+  !event.eventDate;
+
       const eventStartDate =
   event.eventDate || event.date || "";
 
@@ -449,6 +456,7 @@ function overlapsDateRange(
   filterStart: string,
   filterEnd: string
 ) {
+  if (isPermanent) return true;
   if (!eventStartDate || !filterStart) {
     return false;
   }
