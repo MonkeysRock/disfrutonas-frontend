@@ -19,9 +19,38 @@ export type EventCardData = {
 };
 
 function formatEventDate(date?: string) {
-  if (!date) return "Próximamente";
+  if (!date || typeof date !== "string") {
+    return "Consultar disponibilidad";
+  }
 
-  const parsed = new Date(`${date}T12:00:00`);
+  const normalized = date.trim();
+
+  // Acepta fechas YYYY-MM-DD y fechas ISO con hora.
+  const match = normalized.match(/^(\\d{4})-(\\d{2})-(\\d{2})(?:$|T|\\s)/);
+
+  if (!match) {
+    return "Consultar disponibilidad";
+  }
+
+  const [, year, month, day] = match;
+
+  // Mediodía local para evitar desplazamientos de día por zona horaria.
+  const parsed = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    12
+  );
+
+  // Comprueba también fechas imposibles, como 2026-02-30.
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getFullYear() !== Number(year) ||
+    parsed.getMonth() !== Number(month) - 1 ||
+    parsed.getDate() !== Number(day)
+  ) {
+    return "Consultar disponibilidad";
+  }
 
   return new Intl.DateTimeFormat("es-ES", {
     day: "numeric",
