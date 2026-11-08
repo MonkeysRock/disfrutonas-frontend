@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
 import FiltersModal from "@/components/search/FiltersModal";
 import { events } from "@/data/events";
+import {
+  sportsCategories as taxonomySportsCategories,
+  culturalCategories as taxonomyCulturalCategories,
+} from "@/data/taxonomy";
 import { normalizeText, searchLocations } from "@/lib/helpers";
 import {
   addMonths,
@@ -30,21 +34,8 @@ type EventDetailHeaderProps = {
   initialLocationName?: string;
 };
 
-const sportsCategories = Array.from(
-  new Set(
-    events
-      .filter((event) => event.pillar === "Deportivos")
-      .map((event) => event.category)
-  )
-).sort((a, b) => a.localeCompare(b, "es"));
-
-const culturalCategories = Array.from(
-  new Set(
-    events
-      .filter((event) => event.pillar === "Culturales")
-      .map((event) => event.category)
-  )
-).sort((a, b) => a.localeCompare(b, "es"));
+const sportsCategories = taxonomySportsCategories;
+const culturalCategories = taxonomyCulturalCategories;
 
 const paidEventPrices = events
   .filter((event) => !event.isFree && typeof event.price === "number")

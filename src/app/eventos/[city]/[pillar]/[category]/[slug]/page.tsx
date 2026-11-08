@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import EventDetailHeader from "@/components/layout/EventDetailHeader";
 import { supabase } from "@/lib/supabase";
+import { buildEventUrl } from "@/lib/event-urls";
 
 const SITE_URL = "https://disfrutonas.com";
 
@@ -18,6 +19,15 @@ type SupabaseEvent = {
   slug: string | null;
   city: string | null;
   city_slug: string | null;
+  source?: string | null;
+  cities?: {
+    name: string;
+    slug: string;
+    countries: {
+      name: string;
+      slug: string;
+    } | null;
+  } | null;
   pillar: string | null;
   pillar_slug: string | null;
   category: string | null;
@@ -48,6 +58,9 @@ type EventDetail = {
   slug: string;
   city: string;
   citySlug: string;
+  country: string;
+  countrySlug: string;
+  source: string;
   pillar: string;
   pillarSlug: string;
   category: string;
@@ -89,6 +102,9 @@ function mapSupabaseEvent(event: SupabaseEvent): EventDetail {
   ["donostia", "san-sebastian"].includes(event.city_slug || "")
     ? "san-sebastian"
     : event.city_slug || "",
+    country: event.cities?.countries?.name || "",
+    countrySlug: event.cities?.countries?.slug || "",
+    source: event.source || "",
     pillar: event.pillar || "Culturales",
     pillarSlug: event.pillar_slug || "culturales",
     category: event.category || "General",
@@ -124,7 +140,7 @@ function mapSupabaseEvent(event: SupabaseEvent): EventDetail {
 async function getEventByFullPath(params: PageParams) {
   const { data, error } = await supabase
     .from("events")
-    .select("*")
+    .select("*, cities(name, slug, countries(name, slug))")
     .in(
   "city_slug",
   ["donostia", "san-sebastian"].includes(params.city)
@@ -150,12 +166,15 @@ type EventOffer = {
   price: number;
   currency: string;
   affiliate_url: string;
+  ticket_type: string | null;
+  whats_included: string | null;
+  sale_status: string | null;
 };
 
 async function getEventOffers(eventId: string): Promise<EventOffer[]> {
   const { data, error } = await supabase
     .from("event_offers")
-    .select("id, merchant, source, price, currency, affiliate_url")
+    .select("id, merchant, source, price, currency, affiliate_url, ticket_type, whats_included, sale_status")
     .eq("event_id", eventId)
     .gt("price", 0)
     .order("price", { ascending: true });
@@ -173,7 +192,7 @@ async function getRelatedEvents(event: EventDetail) {
 
   const { data, error } = await supabase
     .from("events")
-    .select("*")
+    .select("*, cities(name, slug, countries(name, slug))")
     .neq("id", event.id)
     .or(`city_slug.eq.${event.citySlug},category_slug.eq.${event.categorySlug}`)
     .or(
@@ -213,7 +232,13 @@ export async function generateMetadata({
     ? "san-sebastian"
     : event.citySlug;
 
-const canonicalPath = `/eventos/${canonicalCitySlug}/${event.pillarSlug}/${event.categorySlug}/${event.slug}`;
+const canonicalPath = buildEventUrl({
+    countrySlug: event.countrySlug,
+    citySlug: canonicalCitySlug,
+    pillarSlug: event.pillarSlug,
+    categorySlug: event.categorySlug,
+    slug: event.slug,
+  });
   const absoluteUrl = `${SITE_URL}${canonicalPath}`;
 
   return {
@@ -341,12 +366,21 @@ export default async function EventDetailPage({
   }
 const eventOffers = await getEventOffers(event.id);
   const relatedEvents = await getRelatedEvents(event);
-  const narrativeBlocks = buildEventNarrative(event);
+  const narrativeBlocks =
+    event.source === "tiqets"
+      ? [event.description]
+      : buildEventNarrative(event);
 
-  const eventUrl = `${SITE_URL}/eventos/${event.citySlug}/${event.pillarSlug}/${event.categorySlug}/${event.slug}`;
+  const eventUrl = `${SITE_URL}${buildEventUrl({
+    countrySlug: event.countrySlug,
+    citySlug: event.citySlug,
+    pillarSlug: event.pillarSlug,
+    categorySlug: event.categorySlug,
+    slug: event.slug,
+  })}`;
   const startDate = `${event.eventDate}T${event.time}:00`;
 
-  const isPermanent = !event.eventDate && event.date === "Permanente";
+  const isPermanent = !event.eventDate && (event.date === "Permanente" || event.source === "tiqets");
 
   const eventJsonLd = isPermanent
     ? {
@@ -364,7 +398,7 @@ const eventOffers = await getEventOffers(event.id);
         address: {
           "@type": "PostalAddress",
           addressLocality: event.city,
-          addressCountry: "ES",
+          addressCountry: event.country || "España",
         },
       }
     : {
@@ -385,7 +419,7 @@ const eventOffers = await getEventOffers(event.id);
       address: {
         "@type": "PostalAddress",
         addressLocality: event.city,
-        addressCountry: "ES",
+        addressCountry: event.country || "España",
       },
       geo: {
         "@type": "GeoCoordinates",
@@ -429,35 +463,53 @@ const eventOffers = await getEventOffers(event.id);
     Eventos
   </Link>
 
-  <span className="mx-1"> / </span>
-
-  <Link
-    href={`/eventos/${event.citySlug}`}
-    className="text-[#666] no-underline hover:underline"
-  >
-    {event.city}
-  </Link>
+  {event.countrySlug && event.countrySlug !== "espana" && (
+    <>
+      <span className="mx-1"> / </span>
+      <span>{event.country}</span>
+    </>
+  )}
 
   <span className="mx-1"> / </span>
 
-  <Link
-    href={`/eventos/${event.citySlug}/${event.pillarSlug}`}
-    className="text-[#666] no-underline hover:underline"
-  >
-    {event.pillar}
-  </Link>
+  {event.countrySlug && event.countrySlug !== "espana" ? (
+    <span>{event.city}</span>
+  ) : (
+    <Link
+      href={buildEventUrl({ citySlug: event.citySlug })}
+      className="text-[#666] no-underline hover:underline"
+    >
+      {event.city}
+    </Link>
+  )}
 
   <span className="mx-1"> / </span>
 
-  <Link
-    href={`/eventos/${event.citySlug}/${event.pillarSlug}/${event.categorySlug}`}
-    className="text-[#666] no-underline hover:underline"
-  >
-    {event.category}
-  </Link>
+  {event.countrySlug && event.countrySlug !== "espana" ? (
+    <span>{event.pillar}</span>
+  ) : (
+    <Link
+      href={buildEventUrl({ citySlug: event.citySlug, pillarSlug: event.pillarSlug })}
+      className="text-[#666] no-underline hover:underline"
+    >
+      {event.pillar}
+    </Link>
+  )}
 
   <span className="mx-1"> / </span>
 
+  {event.countrySlug && event.countrySlug !== "espana" ? (
+    <span>{event.category}</span>
+  ) : (
+    <Link
+      href={buildEventUrl({ citySlug: event.citySlug, pillarSlug: event.pillarSlug, categorySlug: event.categorySlug })}
+      className="text-[#666] no-underline hover:underline"
+    >
+      {event.category}
+    </Link>
+  )}
+
+  <span className="mx-1"> / </span>
   <span className="text-[#888]">{event.title}</span>
 </nav>
 
@@ -518,7 +570,7 @@ const eventOffers = await getEventOffers(event.id);
                  <iframe
   title={`Mapa de ${event.place}`}
   src={`https://www.google.com/maps?q=${encodeURIComponent(
-    `${event.place}, ${event.city}, España`
+    `${event.place}, ${event.city}, ${event.country || "España"}`
   )}&z=15&output=embed`}
   width="100%"
   height="320"
@@ -534,7 +586,7 @@ const eventOffers = await getEventOffers(event.id);
 
                   <a
                     href={`https://www.google.com/maps?q=${encodeURIComponent(
-  `${event.place}, ${event.city}, España`
+  `${event.place}, ${event.city}, ${event.country || "España"}`
 )}`}
                     target="_blank"
                     rel="noreferrer"
@@ -556,12 +608,16 @@ const eventOffers = await getEventOffers(event.id);
                <div className="rounded-[18px] border border-[#eee] bg-[#fafafa] p-4">
   <div className="mb-2 text-xs font-bold text-[#777]">CIUDAD</div>
 
-  <Link
-    href={`/eventos/${event.citySlug}`}
-    className="font-bold text-[#111] no-underline hover:underline"
-  >
-    {event.city}
-  </Link>
+  {event.countrySlug && event.countrySlug !== "espana" ? (
+    <span className="font-bold text-[#111]">{event.city}</span>
+  ) : (
+    <Link
+      href={buildEventUrl({ citySlug: event.citySlug })}
+      className="font-bold text-[#111] no-underline hover:underline"
+    >
+      {event.city}
+    </Link>
+  )}
 </div>
 
                 <div className="rounded-[18px] border border-[#eee] bg-[#fafafa] p-4">
@@ -602,21 +658,63 @@ const eventOffers = await getEventOffers(event.id);
           key={offer.id}
           className="rounded-[14px] border border-[#eee] p-4"
         >
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <span className="font-bold">{offer.merchant}</span>
-            <span className="font-extrabold">
-              {offer.price.toFixed(2).replace(".", ",")} €
-            </span>
-          </div>
+          {offer.source === "tiqets" ? (
+            <>
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-bold leading-snug">
+                    {offer.ticket_type || "Entrada"}
+                  </div>
+                  
+                </div>
+                <span className="shrink-0 font-extrabold">
+                  {offer.price.toFixed(2).replace(".", ",")} €
+                </span>
+              </div>
 
-          <a
-            href={offer.affiliate_url}
-            target="_blank"
-            rel="noopener noreferrer sponsored"
-            className="block w-full rounded-[12px] bg-[#111] px-4 py-3 text-center font-bold text-white no-underline hover:bg-[#222]"
-          >
-            Ver entradas
-          </a>
+              {offer.whats_included && (
+                <ul className="mb-4 space-y-1.5 text-sm text-[#555]">
+                  {offer.whats_included
+                    .split(/\r?\n/)
+                    .map((item) => item.replace(/^\s*[*-]\s*/, "").trim())
+                    .filter(Boolean)
+                    .map((item, index) => (
+                      <li key={index} className="flex gap-2">
+                        <span className="text-green-600">✓</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                </ul>
+              )}
+
+              <a
+                href={offer.affiliate_url}
+                target="_blank"
+                rel="noopener noreferrer sponsored"
+                className="block w-full rounded-[12px] bg-[#111] px-4 py-3 text-center font-bold text-white no-underline hover:bg-[#222]"
+              >
+                Consultar disponibilidad
+              </a>
+            </>
+          ) : (
+            <>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <span className="font-bold">{offer.merchant}</span>
+                <span className="font-extrabold">
+                  {offer.price.toFixed(2).replace(".", ",")} €
+                </span>
+              </div>
+
+              <a
+                href={offer.affiliate_url}
+                target="_blank"
+                rel="noopener noreferrer sponsored"
+                className="block w-full rounded-[12px] bg-[#111] px-4 py-3 text-center font-bold text-white no-underline hover:bg-[#222]"
+              >
+                Ver entradas
+              </a>
+            </>
+          )}
         </div>
       ))}
     </div>
@@ -642,6 +740,7 @@ const eventOffers = await getEventOffers(event.id);
               Guardar evento
             </button>
 
+            {!eventOffers.some((offer) => offer.source === "tiqets") && (
             <div className="border-t border-[#eee] pt-[18px]">
               <div className="mb-3 text-[13px] font-bold text-[#777]">
                 QUÉ INCLUYE
@@ -658,6 +757,7 @@ const eventOffers = await getEventOffers(event.id);
                 ))}
               </div>
             </div>
+            )}
           </aside>
         </section>
 
@@ -671,7 +771,7 @@ const eventOffers = await getEventOffers(event.id);
               {relatedEvents.map((item) => (
                 <Link
                   key={item.id}
-                  href={`/eventos/${item.citySlug}/${item.pillarSlug}/${item.categorySlug}/${item.slug}`}
+                  href={buildEventUrl({ countrySlug: item.countrySlug, citySlug: item.citySlug, pillarSlug: item.pillarSlug, categorySlug: item.categorySlug, slug: item.slug })}
                   className="overflow-hidden rounded-[20px] border border-[#eee] bg-white no-underline shadow-[0_8px_20px_rgba(0,0,0,0.05)] transition hover:translate-y-[-2px]"
                 >
                   <img

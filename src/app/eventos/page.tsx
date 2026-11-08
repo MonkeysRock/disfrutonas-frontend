@@ -743,10 +743,13 @@ const matchesPrice = onlyFree
 
         <div className="mb-8">
           <h1 className="mb-2 text-[34px] font-extrabold tracking-[-0.8px] sm:text-[44px]">
+            Eventos, conciertos y planes en España
+          </h1>
+          <p className="text-base font-semibold text-[#666]">
             {isLoadingEvents
               ? "Cargando eventos..."
               : `${filteredEvents.length} evento${filteredEvents.length === 1 ? "" : "s"} encontrados`}
-          </h1>
+          </p>
 
          
 
@@ -791,7 +794,20 @@ const matchesPrice = onlyFree
 
 export default function EventsPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-white text-[#111]">
+          <section className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8">
+            <h1 className="text-[34px] font-extrabold tracking-[-0.8px] sm:text-[44px]">
+              Eventos, conciertos y planes en España
+            </h1>
+            <p className="mt-2 text-base text-[#666]">
+              Cargando eventos...
+            </p>
+          </section>
+        </main>
+      }
+    >
       <EventsPageContent />
     </Suspense>
   );

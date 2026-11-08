@@ -5,12 +5,12 @@ import EventsHeader from "@/components/layout/EventsHeader";
 import EventCard from "@/components/events/EventCard";
 
 
-async function getEventsByCity(city: string) {
+export async function getEventsByCity(city: string) {
   const today = new Date().toISOString().split("T")[0];
 
   const { data, error } = await supabase
     .from("events")
-    .select("*")
+    .select("*, cities(name, slug, countries(name, slug))")
    .in(
   "city_slug",
   ["donostia", "san-sebastian"].includes(city.toLowerCase())
@@ -18,7 +18,7 @@ async function getEventsByCity(city: string) {
     : [city.toLowerCase()]
 )
     .or(
-  `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today})`
+  `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today}),and(source.eq.tiqets,event_date.is.null)`
 )
     .order("event_date", { ascending: true });
 
@@ -41,6 +41,11 @@ async function getEventsByCity(city: string) {
   ["donostia", "san-sebastian"].includes(event.city_slug || "")
     ? "san-sebastian"
     : event.city_slug || "",
+    countrySlug: (
+      event.cities as {
+        countries?: { slug?: string } | null;
+      } | null
+    )?.countries?.slug || "",
     pillar: event.pillar || "",
     pillarSlug: event.pillar_slug || "",
     category: event.category || "",
@@ -91,7 +96,7 @@ export async function generateMetadata({
   const cityName =
     cityInfo?.title.replace("Eventos en ", "") || cityNameFromSlug(city);
 
-  const pageTitle = `Eventos en ${cityName} | Disfrutonas`;
+  const pageTitle = `Eventos en ${cityName}`;
 
   const pageDescription = cityInfo?.description
     ? `${cityInfo.description} Descubre ${cityEvents.length} eventos disponibles en ${cityName}.`

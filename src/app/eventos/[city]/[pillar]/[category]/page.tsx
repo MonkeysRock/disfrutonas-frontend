@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import EventsHeader from "@/components/layout/EventsHeader";
 import EventCard from "@/components/events/EventCard";
 
-async function getEventsByCityPillarAndCategory(
+export async function getEventsByCityPillarAndCategory(
   city: string,
   pillar: string,
   category: string
@@ -13,7 +13,7 @@ async function getEventsByCityPillarAndCategory(
   const { data, error } = await supabase
 
     .from("events")
-    .select("*")
+    .select("*, cities(name, slug, countries(name, slug))")
     .in(
   "city_slug",
   ["donostia", "san-sebastian"].includes(city.toLowerCase())
@@ -23,7 +23,7 @@ async function getEventsByCityPillarAndCategory(
     .eq("pillar_slug", pillar)
     .eq("category_slug", category)
     .or(
-  `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today})`
+  `event_date.gte.${today},and(end_date.not.is.null,end_date.gte.${today}),and(source.eq.tiqets,event_date.is.null)`
 )
     .order("event_date", { ascending: true });
 
@@ -46,6 +46,11 @@ async function getEventsByCityPillarAndCategory(
   ["donostia", "san-sebastian"].includes(event.city_slug || "")
     ? "san-sebastian"
     : event.city_slug || "",
+    countrySlug: (
+      event.cities as {
+        countries?: { slug?: string } | null;
+      } | null
+    )?.countries?.slug || "",
     pillar: event.pillar || "",
     pillarSlug: event.pillar_slug || "",
     category: event.category || "",
@@ -105,7 +110,7 @@ export async function generateMetadata({
   }
 
   const cityLabel = city.charAt(0).toUpperCase() + city.slice(1);
-  const pageTitle = `${categoryLabel} en ${cityLabel} | Disfrutonas`;
+  const pageTitle = `${categoryLabel} en ${cityLabel}`;
   const pageDescription = `Descubre ${filtered.length} eventos de ${categoryLabel.toLowerCase()} en ${cityLabel}. Encuentra planes, horarios, lugares y acceso a cada ficha.`;
   const canonicalPath = `/eventos/${city}/${pillar}/${category}`;
 

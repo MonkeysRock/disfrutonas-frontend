@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { buildEventUrl } from "@/lib/event-urls";
 
 export type EventCardData = {
   title: string;
   slug: string;
   city: string;
   citySlug: string;
+  countrySlug?: string;
   pillar: string;
   pillarSlug: string;
   category: string;
@@ -78,7 +80,13 @@ export default function EventCard({
 }) {
   return (
     <Link
-      href={`/eventos/${event.citySlug}/${event.pillarSlug}/${event.categorySlug}/${event.slug}`}
+      href={buildEventUrl({
+        countrySlug: event.countrySlug,
+        citySlug: event.citySlug,
+        pillarSlug: event.pillarSlug,
+        categorySlug: event.categorySlug,
+        slug: event.slug,
+      })}
       className="block overflow-hidden rounded-[24px] border border-[#eee] bg-white text-[#111] no-underline shadow-[0_8px_24px_rgba(0,0,0,0.05)] transition hover:translate-y-[-2px]"
     >
       <img
